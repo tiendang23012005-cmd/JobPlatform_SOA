@@ -1,0 +1,13 @@
+@page "/"
+
+<PageTitle>JobPlatform</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="jp-page-head"><h1>Bảng điều khiển</h1><p>Tổng quan hoạt động của bạn.</p></div>
+        <DashboardView />
+    </Authorized>
+    <NotAuthorized>
+        <LandingView />
+    </NotAuthorized>
+</AuthorizeView>

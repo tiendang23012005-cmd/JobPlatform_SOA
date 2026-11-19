@@ -1,0 +1,47 @@
+@page "/notifications"
+@attribute [Authorize]
+@inject HttpClient Http
+
+<PageTitle>Thông báo · JobPlatform</PageTitle>
+<div class="jp-page-head"><h1>Thông báo</h1><p>Các cập nhật mới nhất dành cho bạn.</p></div>
+
+<div class="card" style="max-width:860px"><div class="card-body py-2">
+@if (error is not null) { <div class="alert alert-danger my-3">@error</div> }
+else if (items is null) { <p class="text-muted my-3">Đang tải...</p> }
+else if (items.Count == 0) { <div class="jp-empty"><i class="bi bi-bell-slash"></i>Bạn chưa có thông báo nào.</div> }
+else
+{
+    @foreach (var n in items)
+    {
+        <div class="jp-note @(n.IsRead ? "" : "unread")">
+            <div class="ico"><i class="bi bi-envelope-check"></i></div>
+            <div class="flex-grow-1"><div class="@(n.IsRead ? "" : "fw-semibold")">@n.Content</div><small>@Ui.TimeAgo(n.CreatedAt)</small></div>
+            @if (!n.IsRead)
+            {
+                <button class="btn btn-light-blue btn-sm align-self-center" @onclick="() => MarkRead(n)">Đã đọc</button>
+            }
+        </div>
+    }
+}
+</div></div>
+
+@code {
+    private List<NotificationItem>? items;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { items = await Http.GetFromJsonAsync<List<NotificationItem>>("api/v1/notifications") ?? new(); }
+        catch (Exception ex) { error = "Không tải được thông báo: " + ex.Message; }
+    }
+
+    private async Task MarkRead(NotificationItem n)
+    {
+        var res = await Http.PutAsync($"api/v1/notifications/{n.Id}/read", null);
+        if (res.IsSuccessStatusCode && items is not null)
+        {
+            var i = items.IndexOf(n);
+            if (i >= 0) items[i] = n with { IsRead = true };
+        }
+    }
+}

@@ -1,0 +1,100 @@
+﻿@inherits LayoutComponentBase
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        @{
+            var role = context.User.FindFirst("role")?.Value ?? "";
+            var name = context.User.Identity?.Name ?? "";
+            var email = context.User.FindFirst("email")?.Value ?? "";
+        }
+        <div class="jp-shell">
+            <div class="jp-backdrop @(sidebarOpen ? "show" : "")" @onclick="CloseSidebar"></div>
+            <aside class="jp-sidebar @(sidebarOpen ? "open" : "")">
+                <a class="jp-brand" href=""><span class="jp-logo"><i class="bi bi-briefcase-fill"></i></span>JobPlatform</a>
+                <nav class="jp-nav">
+                    @foreach (var sec in MenuCatalog.For(role))
+                    {
+                        <div class="jp-nav-title">@sec.Title</div>
+                        @foreach (var item in sec.Items)
+                        {
+                            <NavLink class="jp-nav-link" href="@item.Href" Match="@(item.Exact ? NavLinkMatch.All : NavLinkMatch.Prefix)" @onclick="CloseSidebar">
+                                <i class="bi @item.Icon"></i><span>@item.Text</span>
+                            </NavLink>
+                        }
+                    }
+                </nav>
+                <div class="jp-side-foot">
+                    <i class="bi bi-person-badge me-1"></i> Đăng nhập với vai trò<br /><b>@Ui.RoleLabel(role)</b>
+                </div>
+            </aside>
+
+            <div class="jp-main">
+                <header class="jp-topbar">
+                    <button class="jp-icon-btn d-lg-none" @onclick="ToggleSidebar" aria-label="Menu"><i class="bi bi-list"></i></button>
+                    <div class="jp-top-title d-none d-md-block">Xin chào, @name<small>@Ui.RoleLabel(role)</small></div>
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <NotificationBell />
+                        <div class="jp-user">
+                            <button class="jp-user-btn" @onclick="() => userMenu = !userMenu">
+                                <span class="jp-avatar">@Ui.Initials(name)</span>
+                                <span class="d-none d-md-block text-start"><b>@name</b><small>@Ui.RoleLabel(role)</small></span>
+                                <i class="bi bi-chevron-down small text-muted"></i>
+                            </button>
+                            @if (userMenu)
+                            {
+                                <div class="jp-click-away" @onclick="() => userMenu = false"></div>
+                                <div class="jp-dropdown">
+                                    <div class="head"><b>@name</b><small>@email</small></div>
+                                    <NavLink href="profile" @onclick="() => userMenu = false"><i class="bi bi-person-circle"></i> Hồ sơ của tôi</NavLink>
+                                    <NavLink href="notifications" @onclick="() => userMenu = false"><i class="bi bi-bell"></i> Thông báo</NavLink>
+                                    <button class="danger" @onclick="Logout"><i class="bi bi-box-arrow-right"></i> Đăng xuất</button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </header>
+                <main class="jp-content">@Body</main>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="jp-public">
+            <header class="jp-pubnav">
+                <div class="container inner">
+                    <a class="jp-brand dark" href=""><span class="jp-logo"><i class="bi bi-briefcase-fill"></i></span>JobPlatform</a>
+                    <nav class="links d-none d-md-block ms-4">
+                        <a href="#features">Tính năng</a><a href="#how">Cách hoạt động</a>
+                    </nav>
+                    <div class="ms-auto d-flex gap-2">
+                        <a class="btn btn-light-blue" href="login">Đăng nhập</a>
+                        <a class="btn btn-primary" href="register">Đăng ký</a>
+                    </div>
+                </div>
+            </header>
+            <main>@Body</main>
+            <footer class="jp-footer">
+                <div class="container d-flex flex-wrap justify-content-between gap-2">
+                    <span><i class="bi bi-briefcase-fill me-2"></i><b class="text-white">JobPlatform</b> · Nền tảng việc làm bán thời gian và tự do</span>
+                    <span>© 2026 JobPlatform</span>
+                </div>
+            </footer>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private bool sidebarOpen, userMenu;
+
+    private void ToggleSidebar() => sidebarOpen = !sidebarOpen;
+    private void CloseSidebar() => sidebarOpen = false;
+
+    private async Task Logout()
+    {
+        userMenu = false;
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("login");
+    }
+}
+

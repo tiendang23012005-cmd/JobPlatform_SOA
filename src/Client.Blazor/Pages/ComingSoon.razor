@@ -1,0 +1,26 @@
+@page "/soon/{Slug}"
+@attribute [Authorize]
+
+<PageTitle>@Title · JobPlatform</PageTitle>
+
+<div class="jp-page-head"><h1>@Title</h1></div>
+<div class="card"><div class="card-body jp-empty py-5">
+    <i class="bi bi-tools"></i>
+    <h5 class="fw-bold text-dark">Tính năng đang được phát triển</h5>
+    <p class="mb-3">Chức năng này sẽ được hoàn thiện ở các giai đoạn tiếp theo của dự án.</p>
+    <a class="btn btn-primary" href="">Về bảng điều khiển</a>
+</div></div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private static readonly Dictionary<string, string> Titles = new()
+    {
+        ["tim-viec"] = "Tìm việc", ["don-ung-tuyen"] = "Đơn ứng tuyển", ["hop-dong"] = "Hợp đồng",
+        ["vi"] = "Ví và thanh toán", ["dang-tin"] = "Đăng tin tuyển dụng", ["tin-cua-toi"] = "Tin của tôi",
+        ["ung-vien"] = "Ứng viên", ["duyet-tin"] = "Duyệt tin tuyển dụng", ["nguoi-dung"] = "Quản lý người dùng",
+        ["tranh-chap"] = "Tranh chấp", ["giao-dich"] = "Giao dịch"
+    };
+
+    private string Title => Titles.TryGetValue(Slug, out var t) ? t : "Tính năng";
+}

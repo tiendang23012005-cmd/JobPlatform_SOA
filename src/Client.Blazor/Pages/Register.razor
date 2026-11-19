@@ -1,0 +1,100 @@
+@page "/register"
+@layout AuthLayout
+@using System.ComponentModel.DataAnnotations
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Đăng ký · JobPlatform</PageTitle>
+
+<h1>Tạo tài khoản</h1>
+<p class="text-muted mb-4">Bắt đầu hành trình của bạn trên JobPlatform.</p>
+
+<EditForm Model="model" OnValidSubmit="Submit">
+    <DataAnnotationsValidator />
+
+    <label class="form-label">Bạn muốn tham gia với vai trò</label>
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <button type="button" class="jp-role-card @(model.Role == "Freelancer" ? "selected" : "")" @onclick='() => model.Role = "Freelancer"'>
+                <i class="bi bi-person-workspace"></i><b>Freelancer</b><small>Tìm việc và nhận dự án</small>
+            </button>
+        </div>
+        <div class="col-6">
+            <button type="button" class="jp-role-card @(model.Role == "Employer" ? "selected" : "")" @onclick='() => model.Role = "Employer"'>
+                <i class="bi bi-building"></i><b>Nhà tuyển dụng</b><small>Đăng tin và thuê người</small>
+            </button>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Họ và tên</label>
+        <InputText class="form-control" placeholder="Nguyễn Văn A" @bind-Value="model.FullName" />
+        <ValidationMessage For="() => model.FullName" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <InputText class="form-control" placeholder="ban@example.com" @bind-Value="model.Email" />
+        <ValidationMessage For="() => model.Email" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Mật khẩu</label>
+        <div class="input-group">
+            <InputText type="@(show ? "text" : "password")" class="form-control" @bind-Value="model.Password" @oninput="OnPasswordInput" />
+            <button type="button" class="btn btn-eye" @onclick="() => show = !show"><i class="bi @(show ? "bi-eye-slash" : "bi-eye")"></i></button>
+        </div>
+        <div class="jp-strength">
+            @for (var i = 1; i <= 4; i++) { <span class="@(Score() >= i ? "on" + Score() : "")"></span> }
+        </div>
+        <div class="form-text">Tối thiểu 8 ký tự, gồm chữ, số và ký tự đặc biệt.</div>
+        <ValidationMessage For="() => model.Password" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Nhập lại mật khẩu</label>
+        <InputText type="@(show ? "text" : "password")" class="form-control" @bind-Value="model.ConfirmPassword" />
+        <ValidationMessage For="() => model.ConfirmPassword" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(error)) { <div class="alert alert-danger py-2"><i class="bi bi-exclamation-circle me-2"></i>@error</div> }
+    <button class="btn btn-primary w-100 btn-lg" disabled="@busy">
+        @if (busy) { <span class="spinner-border spinner-border-sm me-2"></span> }
+        Tạo tài khoản
+    </button>
+</EditForm>
+
+<div class="text-center mt-4 text-muted">Đã có tài khoản? <a href="login" class="fw-semibold">Đăng nhập</a></div>
+
+@code {
+    private class RegisterForm : RegisterRequest
+    {
+        [Required(ErrorMessage = "Vui lòng nhập lại mật khẩu")]
+        [Compare(nameof(Password), ErrorMessage = "Mật khẩu nhập lại không khớp")]
+        public string ConfirmPassword { get; set; } = "";
+    }
+
+    private readonly RegisterForm model = new() { Role = "Freelancer" };
+    private string? error;
+    private bool busy, show;
+    private string typed = "";
+
+    private void OnPasswordInput(ChangeEventArgs e) => typed = e.Value?.ToString() ?? "";
+
+    private int Score()
+    {
+        var p = typed;
+        var s = 0;
+        if (p.Length >= 8) s++;
+        if (p.Any(char.IsLetter)) s++;
+        if (p.Any(char.IsDigit)) s++;
+        if (p.Any(c => !char.IsLetterOrDigit(c))) s++;
+        return s;
+    }
+
+    private async Task Submit()
+    {
+        busy = true; error = null;
+        var (ok, message) = await Auth.RegisterAsync(model);
+        busy = false;
+        if (ok) Nav.NavigateTo($"verify?email={Uri.EscapeDataString(model.Email)}");
+        else error = message;
+    }
+}

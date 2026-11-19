@@ -1,0 +1,26 @@
+@page "/admin"
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+
+<PageTitle>Hệ thống · JobPlatform</PageTitle>
+<div class="jp-page-head"><h1>Quản trị hệ thống</h1><p>Chỉ tài khoản Quản trị viên truy cập được trang này.</p></div>
+
+<div class="card mb-4"><div class="card-body d-flex align-items-center gap-3">
+    <div class="jp-stat-icon blue"><i class="bi bi-shield-lock"></i></div>
+    <div>
+        <div class="fw-bold">Kiểm tra phân quyền (policy AdminOnly)</div>
+        <div class="text-muted small">Kết quả gọi API <code>users/admin-ping</code>: <span class="jp-chip @(result == "admin ok" ? "ok" : "")">@result</span></div>
+    </div>
+</div></div>
+
+<SystemStatus />
+
+@code {
+    private string result = "đang gọi...";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { result = (await Http.GetStringAsync("api/v1/users/admin-ping")).Trim('"'); }
+        catch (Exception ex) { result = "LỖI: " + ex.Message; }
+    }
+}

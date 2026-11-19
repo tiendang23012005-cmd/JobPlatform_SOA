@@ -1,0 +1,67 @@
+@page "/verify"
+@layout AuthLayout
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Xác minh email · JobPlatform</PageTitle>
+
+<div class="text-center mb-4">
+    <span class="jp-logo mx-auto mb-3" style="width:64px;height:64px;font-size:1.8rem"><i class="bi bi-envelope-check"></i></span>
+    <h1>Xác minh email</h1>
+    <p class="text-muted">Nhập mã gồm 6 chữ số đã gửi tới email của bạn. Mã có hiệu lực trong 5 phút.</p>
+</div>
+
+<EditForm Model="model" OnValidSubmit="Submit">
+    <DataAnnotationsValidator />
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <InputText class="form-control" @bind-Value="model.Email" />
+        <ValidationMessage For="() => model.Email" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Mã OTP</label>
+        <InputText class="form-control jp-otp" maxlength="6" inputmode="numeric" placeholder="······" @bind-Value="model.Otp" />
+        <ValidationMessage For="() => model.Otp" />
+    </div>
+    @if (!string.IsNullOrEmpty(error)) { <div class="alert alert-danger py-2"><i class="bi bi-exclamation-circle me-2"></i>@error</div> }
+    @if (!string.IsNullOrEmpty(info)) { <div class="alert alert-success py-2"><i class="bi bi-check-circle me-2"></i>@info</div> }
+    <button class="btn btn-primary w-100 btn-lg" disabled="@busy">
+        @if (busy) { <span class="spinner-border spinner-border-sm me-2"></span> }
+        Xác minh
+    </button>
+</EditForm>
+
+<div class="text-center mt-4 text-muted">
+    Chưa nhận được mã? <a href="" class="fw-semibold" @onclick="Resend" @onclick:preventDefault>Gửi lại mã</a><br />
+    <a href="login" class="small">Quay lại đăng nhập</a>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Email { get; set; }
+
+    private readonly VerifyOtpRequest model = new();
+    private string? error, info;
+    private bool busy;
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(Email) && string.IsNullOrEmpty(model.Email)) model.Email = Email;
+    }
+
+    private async Task Submit()
+    {
+        busy = true; error = info = null;
+        var (ok, message) = await Auth.VerifyAsync(model);
+        busy = false;
+        if (ok) Nav.NavigateTo("login?verified=true");
+        else error = message;
+    }
+
+    private async Task Resend()
+    {
+        error = info = null;
+        if (string.IsNullOrWhiteSpace(model.Email)) { error = "Vui lòng nhập email."; return; }
+        var (ok, message) = await Auth.ResendOtpAsync(new ResendOtpRequest { Email = model.Email });
+        if (ok) info = message; else error = message;
+    }
+}

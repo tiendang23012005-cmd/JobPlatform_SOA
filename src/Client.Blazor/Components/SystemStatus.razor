@@ -1,0 +1,56 @@
+@inject HttpClient Http
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="jp-section-title mb-0">Trạng thái dịch vụ (qua API Gateway)</div>
+            <button class="btn btn-light-blue btn-sm" @onclick="CheckAll" disabled="@busy">
+                <i class="bi bi-arrow-repeat me-1"></i>Kiểm tra lại
+            </button>
+        </div>
+        @foreach (var r in rows)
+        {
+            <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                <div><b>@r.Name</b> <small class="text-muted ms-2">@r.Path</small></div>
+                @if (r.Ok is null) { <span class="jp-chip">Đang kiểm tra...</span> }
+                else if (r.Ok == true) { <span class="jp-chip ok"><i class="bi bi-check-circle-fill"></i> Hoạt động</span> }
+                else { <span class="jp-chip bad" title="@r.Detail"><i class="bi bi-x-circle-fill"></i> Lỗi</span> }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private record Row(string Name, string Path, bool? Ok, string Detail = "");
+
+    private static readonly (string Name, string Path)[] Targets =
+    {
+        ("Identity Service", "api/v1/auth/ping"),
+        ("Job Service", "api/v1/jobs/ping"),
+        ("Contract Service", "api/v1/contracts/ping"),
+        ("Payment Service", "api/v1/wallet/ping"),
+        ("Notification Service", "api/v1/notifications/ping"),
+    };
+
+    private List<Row> rows = Targets.Select(t => new Row(t.Name, t.Path, null)).ToList();
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await CheckAll();
+
+    private async Task CheckAll()
+    {
+        busy = true;
+        for (var i = 0; i < Targets.Length; i++)
+        {
+            rows[i] = new Row(Targets[i].Name, Targets[i].Path, null);
+        }
+        StateHasChanged();
+        for (var i = 0; i < Targets.Length; i++)
+        {
+            try { await Http.GetStringAsync(Targets[i].Path); rows[i] = rows[i] with { Ok = true }; }
+            catch (Exception ex) { rows[i] = rows[i] with { Ok = false, Detail = ex.Message }; }
+            StateHasChanged();
+        }
+        busy = false;
+    }
+}

@@ -1,0 +1,33 @@
+@implements IDisposable
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<a class="jp-icon-btn" href="notifications" title="Thông báo">
+    <i class="bi bi-bell"></i>
+    @if (unread > 0) { <span class="jp-badge">@(unread > 9 ? "9+" : unread.ToString())</span> }
+</a>
+
+@code {
+    private int unread;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        await Load();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+
+    private async Task Load()
+    {
+        try
+        {
+            var list = await Http.GetFromJsonAsync<List<NotificationItem>>("api/v1/notifications");
+            unread = list?.Count(n => !n.IsRead) ?? 0;
+        }
+        catch { unread = 0; }
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

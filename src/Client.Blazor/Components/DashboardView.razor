@@ -1,0 +1,150 @@
+@inject HttpClient Http
+
+<div class="jp-hero-card">
+    <span class="jp-chip mb-3"><i class="bi bi-person-badge"></i> @Ui.RoleLabel(role)</span>
+    <h2>Xin chào, @name 👋</h2>
+    <p>@Welcome()</p>
+    <a class="btn btn-white mt-2" href="@Primary().Href"><i class="bi @Primary().Icon me-2"></i>@Primary().Text</a>
+</div>
+
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats())
+    {
+        <div class="col-6 col-xl-3">
+            <div class="jp-stat">
+                <div class="jp-stat-icon @s.Tone"><i class="bi @s.Icon"></i></div>
+                <div>
+                    <div class="jp-stat-label">@s.Label</div>
+                    <div class="jp-stat-value">@s.Value</div>
+                    <div class="jp-stat-sub">@s.Sub</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="jp-section-title">Lối tắt</div>
+        @foreach (var a in Actions())
+        {
+            <a class="jp-action" href="@a.Href">
+                <i class="bi @a.Icon lead-i"></i>
+                <div class="flex-grow-1"><b>@a.Title</b><small>@a.Desc</small></div>
+                <i class="bi bi-chevron-right text-muted"></i>
+            </a>
+        }
+    </div>
+    <div class="col-lg-6">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="jp-section-title mb-0">Thông báo gần đây</div>
+            <a href="notifications" class="small fw-semibold">Xem tất cả</a>
+        </div>
+        <div class="card"><div class="card-body py-2">
+            @if (!loaded) { <p class="text-muted my-3">Đang tải...</p> }
+            else if (notes.Count == 0) { <div class="jp-empty"><i class="bi bi-bell-slash"></i>Chưa có thông báo nào.</div> }
+            else
+            {
+                @foreach (var n in notes.Take(5))
+                {
+                    <div class="jp-note @(n.IsRead ? "" : "unread")">
+                        <div class="ico"><i class="bi bi-envelope-check"></i></div>
+                        <div><div>@n.Content</div><small>@Ui.TimeAgo(n.CreatedAt)</small></div>
+                    </div>
+                }
+            }
+        </div></div>
+    </div>
+</div>
+
+@if (role == "Admin")
+{
+    <div class="mt-4"><SystemStatus /></div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthTask { get; set; }
+
+    private record Stat(string Icon, string Label, string Value, string Sub, string Tone);
+    private record Act(string Icon, string Title, string Desc, string Href);
+    private record Primary_(string Icon, string Text, string Href);
+
+    private string role = "", name = "";
+    private List<NotificationItem> notes = new();
+    private bool loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthTask!).User;
+        role = user.FindFirst("role")?.Value ?? "";
+        name = user.Identity?.Name ?? "";
+        try { notes = await Http.GetFromJsonAsync<List<NotificationItem>>("api/v1/notifications") ?? new(); }
+        catch { notes = new(); }
+        loaded = true;
+    }
+
+    private string Unread() => loaded ? notes.Count(n => !n.IsRead).ToString() : "...";
+
+    private string Welcome() => role switch
+    {
+        "Freelancer" => "Tìm dự án phù hợp, theo dõi đơn ứng tuyển và hợp đồng của bạn tại một nơi.",
+        "Employer" => "Đăng tin tuyển dụng, chọn ứng viên và quản lý hợp đồng, ký quỹ dễ dàng.",
+        "Admin" => "Theo dõi tình trạng hệ thống, duyệt tin tuyển dụng và xử lý tranh chấp.",
+        _ => "Chào mừng bạn đến với JobPlatform."
+    };
+
+    private Primary_ Primary() => role switch
+    {
+        "Freelancer" => new("bi-search", "Tìm việc ngay", "soon/tim-viec"),
+        "Employer" => new("bi-plus-square", "Đăng tin tuyển dụng", "soon/dang-tin"),
+        "Admin" => new("bi-speedometer2", "Xem trạng thái hệ thống", "admin"),
+        _ => new("bi-person-circle", "Hồ sơ của tôi", "profile")
+    };
+
+    private IEnumerable<Stat> Stats() => role switch
+    {
+        "Freelancer" => new[]
+        {
+            new Stat("bi-send", "Đơn ứng tuyển", "—", "Sẽ cập nhật", "blue"),
+            new Stat("bi-file-earmark-text", "Hợp đồng đang chạy", "—", "Sẽ cập nhật", "sky"),
+            new Stat("bi-wallet2", "Số dư ví", "—", "Sẽ cập nhật", "indigo"),
+            new Stat("bi-bell", "Thông báo chưa đọc", Unread(), "Cập nhật trực tiếp", "cyan"),
+        },
+        "Employer" => new[]
+        {
+            new Stat("bi-briefcase", "Tin đang tuyển", "—", "Sẽ cập nhật", "blue"),
+            new Stat("bi-people", "Ứng viên mới", "—", "Sẽ cập nhật", "sky"),
+            new Stat("bi-file-earmark-text", "Hợp đồng đang chạy", "—", "Sẽ cập nhật", "indigo"),
+            new Stat("bi-bell", "Thông báo chưa đọc", Unread(), "Cập nhật trực tiếp", "cyan"),
+        },
+        _ => new[]
+        {
+            new Stat("bi-patch-check", "Tin chờ duyệt", "—", "Sẽ cập nhật", "blue"),
+            new Stat("bi-shield-exclamation", "Tranh chấp", "—", "Sẽ cập nhật", "sky"),
+            new Stat("bi-receipt", "Giao dịch hôm nay", "—", "Sẽ cập nhật", "indigo"),
+            new Stat("bi-bell", "Thông báo chưa đọc", Unread(), "Cập nhật trực tiếp", "cyan"),
+        }
+    };
+
+    private IEnumerable<Act> Actions() => role switch
+    {
+        "Freelancer" => new[]
+        {
+            new Act("bi-search", "Tìm việc", "Duyệt các tin tuyển dụng đang mở", "soon/tim-viec"),
+            new Act("bi-file-earmark-text", "Hợp đồng của tôi", "Theo dõi cột mốc và nghiệm thu", "soon/hop-dong"),
+            new Act("bi-person-circle", "Hoàn thiện hồ sơ", "Cập nhật thông tin cá nhân", "profile"),
+        },
+        "Employer" => new[]
+        {
+            new Act("bi-plus-square", "Đăng tin tuyển dụng", "Tạo tin mới để tìm ứng viên", "soon/dang-tin"),
+            new Act("bi-people", "Xem ứng viên", "Chấp nhận hoặc từ chối đơn ứng tuyển", "soon/ung-vien"),
+            new Act("bi-wallet2", "Ví và ký quỹ", "Nạp tiền và ký quỹ cho hợp đồng", "soon/vi"),
+        },
+        _ => new[]
+        {
+            new Act("bi-speedometer2", "Trạng thái hệ thống", "Kiểm tra các dịch vụ", "admin"),
+            new Act("bi-patch-check", "Duyệt tin tuyển dụng", "Phê duyệt tin trước khi công khai", "soon/duyet-tin"),
+            new Act("bi-shield-exclamation", "Xử lý tranh chấp", "Quyết định theo bằng chứng hai bên", "soon/tranh-chap"),
+        }
+    };
+}
