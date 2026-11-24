@@ -29,6 +29,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<JobApiService>();
+builder.Services.AddScoped<WalletApiService>();
 
 await builder.Build().RunAsync();
 await builder.Build().RunAsync();

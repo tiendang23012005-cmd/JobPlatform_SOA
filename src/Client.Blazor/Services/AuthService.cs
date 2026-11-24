@@ -45,7 +45,7 @@ public class AuthService(HttpClient http, TokenStorage storage, JwtAuthStateProv
     }
 
     // Đọc thông báo lỗi từ {"error": "..."} hoặc ProblemDetails {"errors": {...}}.
-    private static async Task<string> ReadError(HttpResponseMessage res)
+    internal static async Task<string> ReadError(HttpResponseMessage res)
     {
         try
         {

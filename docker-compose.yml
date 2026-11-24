@@ -74,6 +74,7 @@ services:
 
   payment-api:
     <<: *svc
+    restart: unless-stopped
     build:
       context: .
       args:
@@ -83,6 +84,11 @@ services:
       ConnectionStrings__Default: "Server=sqlserver;Database=PaymentDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
       Jwt__Key: "${JWT_KEY}"
       RabbitMq__Host: rabbitmq
+      Services__Identity: "http://identity-api:8080/"
+      ASPNETCORE_ENVIRONMENT: "${PAYMENT_ENVIRONMENT:-Production}"
+      PaymentSimulator__Enabled: "${PAYMENT_SIMULATOR_ENABLED:-false}"
+      PaymentSimulator__SigningKey: "${PAYMENT_SIMULATOR_SIGNING_KEY:-}"
+      PaymentSimulator__CallbackBaseUrl: "http://localhost:8080/"
     ports: ["5004:8080"]
 
   notification-api:

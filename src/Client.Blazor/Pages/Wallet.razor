@@ -1,0 +1,212 @@
+@page "/soon/vi"
+@attribute [Authorize]
+@using Shared.Contracts.Payments
+@using System.Text.Json
+@inject WalletApiService Api
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+
+<PageTitle>Ví điện tử · JobPlatform</PageTitle>
+<div class="jp-page-head"><h1>Ví điện tử</h1></div>
+
+@if (error is not null) { <div class="alert alert-danger" role="alert">@error</div> }
+@if (loading) { <p role="status">Đang tải ví...</p> }
+else if (wallet is not null)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-6"><section class="card h-100"><div class="card-body">
+            <h2 class="h6 text-muted">Số dư khả dụng</h2>
+            <p class="h3 text-primary fw-bold text-break mb-4">@Ui.Vnd(wallet.Balance)</p>
+            <h2 class="h6 text-muted">Số dư đang khóa</h2>
+            <p class="h5 text-break mb-0">@Ui.Vnd(wallet.LockedBalance)</p>
+        </div></section></div>
+        <div class="col-md-6"><section class="card h-100"><div class="card-body">
+            <h2 class="h5">Nạp tiền mô phỏng</h2>
+            @if (payment is not null)
+            {
+                <p class="mb-2"><strong>@Ui.Vnd(payment.Amount)</strong> · @Ui.TopUpStatusLabel(payment.Status)</p>
+                <p class="small text-muted text-break">Mã yêu cầu @payment.Id</p>
+                @if (payment.Status == TopUpStatus.Pending && wallet.CanTopUp)
+                {
+                    <a class="btn btn-primary" href="@($"vi/nap-tien/{payment.Id}")">Mở cổng thanh toán</a>
+                }
+                else if (payment.Status != TopUpStatus.Pending && wallet.CanTopUp)
+                {
+                    <button class="btn btn-light-blue" @onclick="NewRequest">Nạp thêm</button>
+                }
+            }
+            else if (!wallet.CanTopUp)
+            {
+                <p class="text-muted mb-0">Nạp tiền mô phỏng chưa được bật trên môi trường này.</p>
+            }
+            else if (draft is not null)
+            {
+                <p>Yêu cầu <strong>@Ui.Vnd(draft.Amount)</strong> đang chờ xác nhận.</p>
+                @if (draft.PaymentId is null)
+                {
+                    <button class="btn btn-primary" disabled="@saving" @onclick="StartTopUp">@(saving ? "Đang gửi..." : "Thử lại với mã đã lưu")</button>
+                }
+                else
+                {
+                    <button class="btn btn-light-blue" @onclick="LoadWallet">Tải lại trạng thái</button>
+                }
+            }
+            else if (confirming)
+            {
+                <p>Xác nhận nạp <strong>@Ui.Vnd(form.Amount)</strong> qua cổng mô phỏng?</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-primary" disabled="@saving" @onclick="StartTopUp">Xác nhận và tiếp tục</button>
+                    <button class="btn btn-light-blue" disabled="@saving" @onclick="() => confirming = false">Quay lại</button>
+                </div>
+            }
+            else
+            {
+                <EditForm Model="form" OnValidSubmit="Review">
+                    <DataAnnotationsValidator />
+                    <label for="wallet-amount" class="form-label">Số tiền (VNĐ)</label>
+                    <InputNumber id="wallet-amount" class="form-control" min="@TopUpRequest.MinAmount"
+                                 max="@TopUpRequest.MaxAmount" step="1" @bind-Value="form.Amount"
+                                 ParsingErrorMessage="Vui lòng nhập số tiền hợp lệ." />
+                    <div class="form-text">Tối thiểu 50.000 VNĐ.</div>
+                    <ValidationMessage For="() => form.Amount" />
+                    <button class="btn btn-primary mt-3">Tiếp tục</button>
+                </EditForm>
+            }
+        </div></section></div>
+    </div>
+}
+else
+{
+    <button class="btn btn-light-blue mb-3" @onclick="LoadWallet">Tải lại ví</button>
+}
+
+<section aria-labelledby="wallet-history">
+    <h2 id="wallet-history" class="h5 mb-3">Lịch sử giao dịch</h2>
+    @if (historyError is not null) { <div class="alert alert-danger" role="alert">@historyError</div> }
+    @if (loadingHistory) { <p role="status">Đang tải giao dịch...</p> }
+    else if (history is not null)
+    {
+        @if (history.Items.Count == 0) { <div class="jp-empty">Chưa có giao dịch nào.</div> }
+        else
+        {
+            <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+                <thead><tr><th scope="col">Mã giao dịch</th><th scope="col">Loại</th><th scope="col">Số tiền</th><th scope="col">Thời gian</th><th scope="col">Trạng thái</th></tr></thead>
+                <tbody>
+                    @foreach (var entry in history.Items)
+                    {
+                        <tr @key="entry.Id">
+                            <td class="small text-break">@entry.Id</td>
+                            <td>@(entry.Type == "TopUp" ? "Nạp tiền" : entry.Type)</td>
+                            <td class="text-nowrap">@Ui.Vnd(entry.Amount)</td>
+                            <td class="text-nowrap">@entry.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><span class="jp-chip">@Ui.TopUpStatusLabel(entry.Status)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table></div></div>
+        }
+        @if (history.Page > 1 || history.TotalCount > history.PageSize)
+        {
+            <nav class="d-flex align-items-center flex-wrap gap-2 mt-3" aria-label="Phân trang giao dịch">
+                <button class="btn btn-light-blue btn-sm" disabled="@(history.Page <= 1)" @onclick="() => LoadHistory(history.Page - 1)">Trang trước</button>
+                <span class="text-muted small">Trang @history.Page / @LastPage</span>
+                <button class="btn btn-light-blue btn-sm" disabled="@(history.Page >= LastPage)" @onclick="() => LoadHistory(history.Page + 1)">Trang sau</button>
+            </nav>
+        }
+    }
+    else if (historyError is not null)
+    {
+        <button class="btn btn-light-blue" @onclick="() => LoadHistory(1)">Tải lại lịch sử</button>
+    }
+</section>
+
+@code {
+    private record TopUpDraft(decimal Amount, string IdempotencyKey, Guid? PaymentId = null);
+
+    private WalletItem? wallet;
+    private WalletTransactionPage? history;
+    private TopUpRequest form = NewForm();
+    private TopUpDraft? draft;
+    private WalletTopUpItem? payment;
+    private bool loading, loadingHistory, confirming, saving;
+    private string? error, historyError;
+    private string DraftKey => $"jp_wallet_topup_{wallet!.UserId:N}";
+    private int LastPage => Math.Max(1, (history!.TotalCount + history.PageSize - 1) / history.PageSize);
+
+    protected override Task OnInitializedAsync() => Task.WhenAll(LoadWallet(), LoadHistory(1));
+
+    private static TopUpRequest NewForm() => new() { Amount = TopUpRequest.MinAmount, IdempotencyKey = Guid.NewGuid().ToString("N") };
+
+    private async Task LoadWallet()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            wallet = await Api.GetWalletAsync();
+            var value = await Js.InvokeAsync<string?>("sessionStorage.getItem", DraftKey);
+            draft = value is null ? null : JsonSerializer.Deserialize<TopUpDraft>(value);
+            if (draft?.PaymentId is Guid id) payment = await Api.GetTopUpAsync(id);
+        }
+        catch (Exception ex) { error = WalletApiService.Error(ex); }
+        finally { loading = false; }
+    }
+
+    private async Task LoadHistory(int page)
+    {
+        if (loadingHistory) return;
+        loadingHistory = true;
+        historyError = null;
+        try { history = await Api.GetTransactionsAsync(page); }
+        catch (Exception ex) { historyError = WalletApiService.Error(ex); }
+        finally { loadingHistory = false; }
+    }
+
+    private void Review()
+    {
+        error = null;
+        confirming = true;
+    }
+
+    private async Task StartTopUp()
+    {
+        if (saving) return;
+        saving = true;
+        confirming = false;
+        error = null;
+        try
+        {
+            draft ??= new TopUpDraft(form.Amount, form.IdempotencyKey);
+            await SaveDraft(draft);
+            payment = await Api.StartTopUpAsync(new TopUpRequest { Amount = draft.Amount, IdempotencyKey = draft.IdempotencyKey });
+            await SaveDraft(draft with { PaymentId = payment.Id });
+            if (payment.Status == TopUpStatus.Pending) Nav.NavigateTo($"vi/nap-tien/{payment.Id}");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict)
+        {
+            await NewRequest();
+            error = WalletApiService.Error(ex);
+        }
+        catch (Exception ex) { error = WalletApiService.Error(ex); }
+        finally { saving = false; }
+    }
+
+    private async Task SaveDraft(TopUpDraft value)
+    {
+        await Js.InvokeVoidAsync("sessionStorage.setItem", DraftKey, JsonSerializer.Serialize(value));
+        draft = value;
+    }
+
+    private async Task NewRequest()
+    {
+        try
+        {
+            await Js.InvokeVoidAsync("sessionStorage.removeItem", DraftKey);
+            draft = null;
+            payment = null;
+            form = NewForm();
+            error = null;
+        }
+        catch (Exception ex) { error = WalletApiService.Error(ex); }
+    }
+}
