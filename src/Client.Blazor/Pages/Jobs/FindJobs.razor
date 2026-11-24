@@ -1,0 +1,746 @@
+﻿@page "/tim-viec"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Client.Blazor.Services
+
+@attribute [Authorize(Roles = "Freelancer")]
+
+@inject JobApiService JobApi
+@inject NavigationManager Nav
+
+<PageTitle>Tìm việc · JobPlatform</PageTitle>
+
+<div class="mb-4">
+    <h2 class="fw-bold mb-1">Tìm kiếm việc làm</h2>
+    <p class="text-muted">
+        Khám phá những cơ hội việc làm phù hợp với kỹ năng của bạn.
+    </p>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">
+        <i class="bi bi-check-circle me-2"></i>
+        @success
+
+        <button class="btn btn-sm btn-outline-success ms-2"
+                @onclick="GoToApplications">
+            Xem đơn của tôi
+        </button>
+    </div>
+}
+
+<!-- BỘ LỌC TÌM KIẾM -->
+
+<div class="card shadow-sm mb-4">
+
+    <div class="card-header bg-white py-3">
+        <h5 class="fw-bold mb-0">
+            <i class="bi bi-search text-primary me-2"></i>
+            Tìm kiếm và bộ lọc
+        </h5>
+    </div>
+
+    <div class="card-body">
+
+        <div class="row g-3">
+
+            <div class="col-md-6">
+
+                <label class="form-label">Từ khóa</label>
+
+                <input class="form-control"
+                       placeholder="Tên công việc, nội dung..."
+                       @bind="keyword" />
+
+            </div>
+
+            <div class="col-md-6">
+
+                <label class="form-label">Kỹ năng</label>
+
+                <input class="form-control"
+                       placeholder="C#, Java, SQL Server..."
+                       @bind="skills" />
+
+            </div>
+
+            <div class="col-md-6">
+
+                <label class="form-label">
+                    Ngân sách tối thiểu (VNĐ)
+                </label>
+
+                <input type="number"
+                       class="form-control"
+                       min="0"
+                       placeholder="Không giới hạn"
+                       @bind="minBudget" />
+
+            </div>
+
+            <div class="col-md-6">
+
+                <label class="form-label">
+                    Ngân sách tối đa (VNĐ)
+                </label>
+
+                <input type="number"
+                       class="form-control"
+                       min="0"
+                       placeholder="Không giới hạn"
+                       @bind="maxBudget" />
+
+            </div>
+
+        </div>
+
+        <div class="mt-3 d-flex gap-2">
+
+            <button class="btn btn-primary px-4"
+                    disabled="@(loading || busy)"
+                    @onclick="SearchAsync">
+
+                <i class="bi bi-search me-2"></i>
+                Tìm kiếm
+
+            </button>
+
+            <button class="btn btn-outline-secondary"
+                    disabled="@(loading || busy)"
+                    @onclick="ResetFiltersAsync">
+
+                <i class="bi bi-arrow-counterclockwise me-2"></i>
+                Xóa bộ lọc
+
+            </button>
+
+        </div>
+
+    </div>
+</div>
+
+<!-- KẾT QUẢ TÌM KIẾM -->
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+
+    <h5 class="fw-bold mb-0">
+        Kết quả tìm kiếm
+    </h5>
+
+    <span class="text-muted">
+        @result.TotalCount công việc
+    </span>
+
+</div>
+
+@if (loading)
+{
+    <div class="text-center py-5">
+
+        <div class="spinner-border text-primary"></div>
+
+        <p class="text-muted mt-2">
+            Đang tìm kiếm việc làm...
+        </p>
+
+    </div>
+}
+else if (result.Items.Count == 0)
+{
+    <div class="card shadow-sm">
+
+        <div class="card-body text-center py-5">
+
+            <i class="bi bi-search fs-1 text-muted"></i>
+
+            <h5 class="mt-3">
+                Không tìm thấy công việc phù hợp
+            </h5>
+
+            <p class="text-muted">
+                Hãy thử thay đổi từ khóa hoặc bộ lọc.
+            </p>
+
+        </div>
+
+    </div>
+}
+else
+{
+    <div class="row g-3">
+
+        @foreach (var job in result.Items)
+        {
+            <div class="col-lg-6" @key="job.Id">
+
+                <div class="card shadow-sm h-100">
+
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between gap-2">
+
+                            <h5 class="fw-bold text-primary">
+                                @job.Title
+                            </h5>
+
+                            <span class="badge bg-success align-self-start">
+                                Đang tuyển
+                            </span>
+
+                        </div>
+
+                        <small class="text-muted">
+
+                            <i class="bi bi-calendar me-1"></i>
+
+                            @job.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")
+
+                        </small>
+
+                        <p class="mt-3 text-muted">
+                            @ShortDescription(job.Description)
+                        </p>
+
+                        <div class="mb-3">
+
+                            @foreach (var skill in job.Skills.Split(
+                                ',',
+                                StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                <span class="badge bg-light text-primary border me-1 mb-1">
+                                    @skill.Trim()
+                                </span>
+                            }
+
+                        </div>
+
+                        <div class="fw-bold text-success mb-3">
+
+                            <i class="bi bi-cash-stack me-2"></i>
+
+                            @JobUi.Money(job.BudgetMin)
+
+                            -
+
+                            @JobUi.Money(job.BudgetMax)
+
+                        </div>
+
+                        <div class="d-flex gap-2 flex-wrap">
+
+                            <button class="btn btn-outline-primary"
+                                    disabled="@busy"
+                                    @onclick="() => ShowDetails(job)">
+
+                                <i class="bi bi-eye me-1"></i>
+                                Xem chi tiết
+
+                            </button>
+
+                            @if (AppliedJobIds.Contains(job.Id))
+                            {
+                                <button class="btn btn-secondary"
+                                        disabled>
+
+                                    <i class="bi bi-check2 me-1"></i>
+                                    Đã ứng tuyển
+
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary"
+                                        disabled="@busy"
+                                        @onclick="() => StartApply(job)">
+
+                                    <i class="bi bi-send me-1"></i>
+                                    Ứng tuyển
+
+                                </button>
+                            }
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+
+    <!-- PHÂN TRANG -->
+
+    @if (result.TotalPages > 1)
+    {
+        <div class="d-flex justify-content-center
+                    align-items-center gap-3 mt-4">
+
+            <button class="btn btn-outline-primary"
+                    disabled="@(page <= 1 || loading || busy)"
+                    @onclick="PreviousPageAsync">
+
+                <i class="bi bi-chevron-left"></i>
+                Trang trước
+
+            </button>
+
+<span class="fw-semibold">
+
+    Trang @(page) / @result.TotalPages
+
+</span>
+
+            <button class="btn btn-outline-primary"
+                    disabled="@(page >= result.TotalPages || loading || busy)"
+                    @onclick="NextPageAsync">
+
+                Trang sau
+                <i class="bi bi-chevron-right"></i>
+
+            </button>
+
+        </div>
+    }
+}
+
+<!-- CHI TIẾT CÔNG VIỆC -->
+
+@if (selectedJob is not null)
+{
+    <div class="card shadow-sm mt-4">
+
+        <div class="card-header bg-white d-flex
+                    justify-content-between align-items-center">
+
+            <h5 class="fw-bold mb-0">
+                Chi tiết công việc
+            </h5>
+
+            <button class="btn-close"
+                    @onclick="CloseDetails">
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            <h4 class="text-primary">
+                @selectedJob.Title
+            </h4>
+
+            <h6 class="fw-bold mt-3">Mô tả công việc</h6>
+
+            <p style="white-space:pre-wrap">
+                @selectedJob.Description
+            </p>
+
+            <h6 class="fw-bold">Kỹ năng yêu cầu</h6>
+
+            <p>@selectedJob.Skills</p>
+
+            <h6 class="fw-bold">Ngân sách</h6>
+
+            <p class="fw-bold text-success">
+
+                @JobUi.Money(selectedJob.BudgetMin)
+
+                -
+
+                @JobUi.Money(selectedJob.BudgetMax)
+
+            </p>
+
+            @if (AppliedJobIds.Contains(selectedJob.Id))
+            {
+                <button class="btn btn-secondary" disabled>
+                    Bạn đã ứng tuyển công việc này
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-primary"
+                        disabled="@busy"
+                        @onclick="ApplySelectedJob">
+
+                    Ứng tuyển ngay
+
+                </button>
+            }
+
+        </div>
+
+    </div>
+}
+
+<!-- FORM ỨNG TUYỂN -->
+
+@if (applyingJob is not null)
+{
+    <div class="card shadow-sm mt-4">
+
+        <div class="card-header bg-white d-flex
+                    justify-content-between align-items-center">
+
+            <h5 class="fw-bold mb-0">
+                Gửi đơn ứng tuyển
+            </h5>
+
+            <button class="btn-close"
+                    disabled="@busy"
+                    @onclick="CancelApply">
+            </button>
+
+        </div>
+
+        <div class="card-body p-4">
+
+            <h5 class="text-primary mb-3">
+                @applyingJob.Title
+            </h5>
+
+            <div class="alert alert-info">
+
+                Khoảng ngân sách của công việc:
+
+                <strong>
+                    @JobUi.Money(applyingJob.BudgetMin)
+                    -
+                    @JobUi.Money(applyingJob.BudgetMax)
+                </strong>
+
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(applyError))
+            {
+                <div class="alert alert-danger">
+                    @applyError
+                </div>
+            }
+
+            <EditForm Model="@applicationForm"
+                      OnValidSubmit="@SubmitApplicationAsync">
+
+                <DataAnnotationsValidator />
+
+                <ValidationSummary />
+
+                <div class="mb-3">
+
+                    <label class="form-label fw-semibold">
+                        Thư ứng tuyển
+                    </label>
+
+                    <InputTextArea class="form-control"
+                                   rows="6"
+                                   @bind-Value="applicationForm.CoverLetter"
+                                   placeholder="Giới thiệu kinh nghiệm, kỹ năng và lý do bạn phù hợp với công việc..." />
+
+                    <ValidationMessage
+                        For="@(() => applicationForm.CoverLetter)" />
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label class="form-label fw-semibold">
+                        Ngân sách đề xuất (VNĐ)
+                    </label>
+
+                    <InputNumber class="form-control"
+                                 @bind-Value="applicationForm.ProposedBudget" />
+
+                    <ValidationMessage
+                        For="@(() => applicationForm.ProposedBudget)" />
+
+                </div>
+
+                <div class="d-flex gap-2">
+
+                    <button type="submit"
+                            class="btn btn-primary"
+                            disabled="@busy">
+
+                        @if (busy)
+                        {
+                            <span class="spinner-border
+                                         spinner-border-sm me-2">
+                            </span>
+
+                            <span>Đang gửi...</span>
+                        }
+                        else
+                        {
+                            <span>
+                                <i class="bi bi-send me-2"></i>
+                                Gửi đơn ứng tuyển
+                            </span>
+                        }
+
+                    </button>
+
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled="@busy"
+                            @onclick="CancelApply">
+
+                        Hủy
+
+                    </button>
+
+                </div>
+
+            </EditForm>
+
+        </div>
+
+    </div>
+}
+
+@code {
+
+    private string keyword = "";
+    private string skills = "";
+
+    private decimal? minBudget;
+    private decimal? maxBudget;
+
+    private int page = 1;
+
+    private const int PageSize = 6;
+
+    private bool loading;
+    private bool busy;
+
+    private string? error;
+    private string? success;
+    private string? applyError;
+
+    private PagedResult<JobItem> result = new();
+
+    private HashSet<Guid> AppliedJobIds = new();
+
+    private JobItem? selectedJob;
+
+    private JobItem? applyingJob;
+
+    private ApplicationForm applicationForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAppliedJobsAsync();
+
+        await LoadJobsAsync();
+    }
+
+    private async Task LoadAppliedJobsAsync()
+    {
+        try
+        {
+            var applications =
+                await JobApi.GetMyApplicationsAsync();
+
+            AppliedJobIds = applications
+                .Select(x => x.JobId)
+                .ToHashSet();
+        }
+        catch
+        {
+            // Backend vẫn kiểm tra ứng tuyển trùng.
+        }
+    }
+
+    private async Task LoadJobsAsync()
+    {
+        if (minBudget.HasValue && minBudget.Value < 0 ||
+            maxBudget.HasValue && maxBudget.Value < 0 ||
+            minBudget.HasValue && maxBudget.HasValue &&
+            minBudget.Value > maxBudget.Value)
+        {
+            error = "Khoảng ngân sách không hợp lệ.";
+            return;
+        }
+
+        loading = true;
+        error = null;
+
+        try
+        {
+            result = await JobApi.SearchAsync(
+                keyword,
+                skills,
+                minBudget,
+                maxBudget,
+                page,
+                PageSize);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        page = 1;
+        selectedJob = null;
+
+        CancelApply();
+
+        await LoadJobsAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        keyword = "";
+        skills = "";
+
+        minBudget = null;
+        maxBudget = null;
+
+        page = 1;
+
+        selectedJob = null;
+
+        CancelApply();
+
+        await LoadJobsAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (page <= 1 || loading || busy)
+            return;
+
+        page--;
+
+        selectedJob = null;
+        CancelApply();
+
+        await LoadJobsAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (page >= result.TotalPages || loading || busy)
+            return;
+
+        page++;
+
+        selectedJob = null;
+        CancelApply();
+
+        await LoadJobsAsync();
+    }
+
+    private static string ShortDescription(string description)
+    {
+        return description.Length > 160
+            ? description[..160] + "..."
+            : description;
+    }
+
+    private void ShowDetails(JobItem job)
+    {
+        selectedJob = job;
+        CancelApply();
+    }
+
+    private void CloseDetails()
+    {
+        selectedJob = null;
+    }
+
+    private void ApplySelectedJob()
+    {
+        if (selectedJob is not null)
+            StartApply(selectedJob);
+    }
+
+    private void StartApply(JobItem job)
+    {
+        if (busy || AppliedJobIds.Contains(job.Id))
+            return;
+
+        selectedJob = null;
+
+        applyingJob = job;
+
+        applicationForm = new ApplicationForm
+        {
+            ProposedBudget = job.BudgetMin
+        };
+
+        applyError = null;
+        error = null;
+        success = null;
+    }
+
+    private void CancelApply()
+    {
+        applyingJob = null;
+        applicationForm = new ApplicationForm();
+        applyError = null;
+    }
+
+    private async Task SubmitApplicationAsync()
+    {
+        if (applyingJob is null || busy)
+            return;
+
+        applyError = null;
+        success = null;
+
+        if (applicationForm.ProposedBudget
+                < applyingJob.BudgetMin ||
+            applicationForm.ProposedBudget
+                > applyingJob.BudgetMax)
+        {
+            applyError =
+                "Ngân sách đề xuất phải nằm trong khoảng ngân sách của công việc.";
+
+            return;
+        }
+
+        busy = true;
+
+        try
+        {
+            var application = await JobApi.SubmitAsync(
+                applyingJob.Id,
+                applicationForm);
+
+            AppliedJobIds.Add(application.JobId);
+
+            success =
+                $"Ứng tuyển công việc '{applyingJob.Title}' thành công! Đơn của bạn đang chờ nhà tuyển dụng xét duyệt.";
+
+            CancelApply();
+        }
+        catch (Exception ex)
+        {
+            applyError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void GoToApplications()
+    {
+        Nav.NavigateTo("don-ung-tuyen");
+    }
+}

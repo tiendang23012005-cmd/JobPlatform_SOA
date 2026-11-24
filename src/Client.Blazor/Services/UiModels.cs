@@ -49,8 +49,8 @@ public static class MenuCatalog
             Overview,
             new MenuSection("Công việc", new[]
             {
-                new MenuItem("bi-search", "Tìm việc", "soon/tim-viec"),
-                new MenuItem("bi-send", "Đơn ứng tuyển", "soon/don-ung-tuyen"),
+                new MenuItem("bi-search", "Tìm việc", "tim-viec"),
+                new MenuItem("bi-send", "Đơn ứng tuyển", "don-ung-tuyen"),
                 new MenuItem("bi-file-earmark-text", "Hợp đồng", "soon/hop-dong"),
             }),
             new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví và thanh toán", "soon/vi") }),
@@ -61,9 +61,9 @@ public static class MenuCatalog
             Overview,
             new MenuSection("Tuyển dụng", new[]
             {
-                new MenuItem("bi-plus-square", "Đăng tin tuyển dụng", "soon/dang-tin"),
-                new MenuItem("bi-briefcase", "Tin của tôi", "soon/tin-cua-toi"),
-                new MenuItem("bi-people", "Ứng viên", "soon/ung-vien"),
+                new MenuItem("bi-plus-square", "Đăng tin tuyển dụng", "dang-tin"),
+                new MenuItem("bi-briefcase", "Tin của tôi", "tin-cua-toi"),
+                new MenuItem("bi-people", "Ứng viên", "ung-vien"),
                 new MenuItem("bi-file-earmark-text", "Hợp đồng", "soon/hop-dong"),
             }),
             new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví và ký quỹ", "soon/vi") }),
@@ -75,7 +75,7 @@ public static class MenuCatalog
             new MenuSection("Quản trị", new[]
             {
                 new MenuItem("bi-speedometer2", "Hệ thống", "admin"),
-                new MenuItem("bi-patch-check", "Duyệt tin tuyển dụng", "soon/duyet-tin"),
+                new MenuItem("bi-patch-check", "Duyệt tin tuyển dụng", "duyet-tin"),
                 new MenuItem("bi-people", "Quản lý người dùng", "soon/nguoi-dung"),
                 new MenuItem("bi-shield-exclamation", "Tranh chấp", "soon/tranh-chap"),
                 new MenuItem("bi-receipt", "Giao dịch", "soon/giao-dich"),

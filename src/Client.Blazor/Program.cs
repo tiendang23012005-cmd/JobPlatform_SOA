@@ -20,5 +20,15 @@ builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<JwtAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthStateProvider>());
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddAuthorizationCore();
 
+builder.Services.AddScoped<JwtAuthStateProvider>();
+
+builder.Services.AddScoped<AuthenticationStateProvider>(
+    sp => sp.GetRequiredService<JwtAuthStateProvider>());
+
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<JobApiService>();
+
+await builder.Build().RunAsync();
 await builder.Build().RunAsync();

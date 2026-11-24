@@ -1,0 +1,216 @@
+﻿@page "/dang-tin"
+@attribute [Authorize(Roles = "Employer")]
+@inject JobApiService JobApi
+@inject NavigationManager Nav
+
+<PageTitle>Đăng tin tuyển dụng · JobPlatform</PageTitle>
+
+<div class="jp-page-head">
+    <h1>Đăng tin tuyển dụng</h1>
+    <p>Tạo cơ hội việc làm và tìm kiếm Freelancer phù hợp.</p>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        @success
+
+        <div class="mt-3">
+            <button class="btn btn-success"
+                    @onclick="GoToMyJobs">
+                Xem tin của tôi
+            </button>
+        </div>
+    </div>
+}
+
+<div class="card shadow-sm"
+     style="max-width: 900px">
+
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold">
+            <i class="bi bi-briefcase me-2 text-primary"></i>
+            Thông tin công việc
+        </h5>
+    </div>
+
+    <div class="card-body p-4">
+
+        <EditForm Model="@form"
+                  OnValidSubmit="@SubmitAsync">
+
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">
+                    Tiêu đề công việc
+                </label>
+
+                <InputText class="form-control"
+                           @bind-Value="form.Title"
+                           placeholder="VD: Tuyển lập trình viên ASP.NET Core" />
+
+                <ValidationMessage
+                    For="@(() => form.Title)" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">
+                    Mô tả công việc
+                </label>
+
+                <InputTextArea class="form-control"
+                               rows="6"
+                               @bind-Value="form.Description"
+                               placeholder="Mô tả nội dung và yêu cầu công việc..." />
+
+                <ValidationMessage
+                    For="@(() => form.Description)" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">
+                    Kỹ năng yêu cầu
+                </label>
+
+                <InputText class="form-control"
+                           @bind-Value="form.Skills"
+                           placeholder="C#, ASP.NET Core, SQL Server" />
+
+                <small class="text-muted">
+                    Các kỹ năng phân cách bằng dấu phẩy.
+                </small>
+
+                <ValidationMessage
+                    For="@(() => form.Skills)" />
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label fw-semibold">
+                        Ngân sách tối thiểu (VNĐ)
+                    </label>
+
+                    <InputNumber class="form-control"
+                                 @bind-Value="form.BudgetMin" />
+
+                    <ValidationMessage
+                        For="@(() => form.BudgetMin)" />
+                </div>
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label fw-semibold">
+                        Ngân sách tối đa (VNĐ)
+                    </label>
+
+                    <InputNumber class="form-control"
+                                 @bind-Value="form.BudgetMax" />
+
+                    <ValidationMessage
+                        For="@(() => form.BudgetMax)" />
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                Tin tuyển dụng sẽ được gửi đến Admin
+                xét duyệt trước khi hiển thị công khai.
+            </div>
+
+            <div class="d-flex gap-2">
+
+                <button type="submit"
+                        class="btn btn-primary px-4"
+                        disabled="@busy">
+
+                    @if (busy)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2">
+                        </span>
+                        <span>Đang xử lý...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-send me-2"></i>
+                        <span>Gửi tin xét duyệt</span>
+                    }
+
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@busy"
+                        @onclick="Reset">
+                    Làm mới
+                </button>
+
+            </div>
+
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private JobForm form = new();
+
+    private bool busy;
+    private string? error;
+    private string? success;
+
+    private async Task SubmitAsync()
+    {
+        if (busy) return;
+
+        error = null;
+        success = null;
+
+        if (form.BudgetMin > form.BudgetMax)
+        {
+            error = "Ngân sách tối thiểu không được lớn hơn ngân sách tối đa.";
+            return;
+        }
+
+        busy = true;
+
+        try
+        {
+            var job = await JobApi.CreateJobAsync(form);
+
+            success =
+                $"Đăng tin thành công! Tin '{job.Title}' đang chờ Admin xét duyệt.";
+
+            form = new JobForm();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Reset()
+    {
+        form = new JobForm();
+        error = null;
+        success = null;
+    }
+
+    private void GoToMyJobs()
+    {
+        Nav.NavigateTo("tin-cua-toi");
+    }
+}
