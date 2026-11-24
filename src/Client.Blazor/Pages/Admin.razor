@@ -1,26 +1,294 @@
+
 @page "/admin"
 @attribute [Authorize(Roles = "Admin")]
 @inject HttpClient Http
 
 <PageTitle>Hệ thống · JobPlatform</PageTitle>
-<div class="jp-page-head"><h1>Quản trị hệ thống</h1><p>Chỉ tài khoản Quản trị viên truy cập được trang này.</p></div>
 
-<div class="card mb-4"><div class="card-body d-flex align-items-center gap-3">
-    <div class="jp-stat-icon blue"><i class="bi bi-shield-lock"></i></div>
-    <div>
-        <div class="fw-bold">Kiểm tra phân quyền (policy AdminOnly)</div>
-        <div class="text-muted small">Kết quả gọi API <code>users/admin-ping</code>: <span class="jp-chip @(result == "admin ok" ? "ok" : "")">@result</span></div>
+<div class="jp-page-head">
+    <h1>Quản trị hệ thống</h1>
+    <p>Chỉ tài khoản Quản trị viên truy cập được trang này.</p>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body d-flex align-items-center gap-3">
+        <div class="jp-stat-icon blue">
+            <i class="bi bi-shield-lock"></i>
+        </div>
+        <div>
+            <div class="fw-bold">Kiểm tra phân quyền (policy AdminOnly)</div>
+            <div class="text-muted small">
+                Kết quả gọi API <code>users/admin-ping</code>:
+                <span class="jp-chip @(result == "admin ok" ? "ok" : "")">
+                    @result
+                </span>
+            </div>
+        </div>
     </div>
-</div></div>
+</div>
 
 <SystemStatus />
 
+<hr class="my-4" />
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3>Quản lý Dead Letter Queue (DLQ)</h3>
+        <p class="text-muted mb-0">
+            Theo dõi các sự kiện không xử lý thành công và gửi lại để xử lý.
+        </p>
+    </div>
+
+    <button class="btn btn-outline-primary"
+            @onclick="LoadQueues"
+            disabled="@loading">
+        <i class="bi bi-arrow-clockwise"></i> Làm mới
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(dlqError))
+{
+    <div class="alert alert-danger">@dlqError</div>
+}
+
+@if (loading)
+{
+    <p>Đang tải danh sách DLQ...</p>
+}
+else if (queues.Count == 0)
+{
+    <div class="alert alert-info">
+        Chưa có dữ liệu DLQ hoặc không thể tải danh sách.
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Loại sự kiện</th>
+                    <th>Queue</th>
+                    <th>Số message lỗi</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var queue in queues)
+                {
+                    <tr>
+                        <td>@queue.Name</td>
+                        <td><code>@queue.DeadLetterQueue</code></td>
+                        <td>
+                            <span class="badge bg-danger">
+                                @queue.MessageCount
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-primary"
+                                    @onclick="() => ViewMessages(queue.Name)">
+                                Xem lỗi
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (selectedQueue != null)
+{
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Message lỗi: @selectedQueue</strong>
+            <button class="btn btn-sm btn-outline-secondary"
+                    @onclick="CloseMessages">
+                Đóng
+            </button>
+        </div>
+
+        <div class="card-body">
+            @if (loadingMessages)
+            {
+                <p>Đang tải message...</p>
+            }
+            else if (messages.Count == 0)
+            {
+                <div class="alert alert-info">
+                    Không có message lỗi trong hàng đợi này.
+                </div>
+            }
+            else
+            {
+                @foreach (var message in messages)
+                {
+                    <div class="border rounded p-3 mb-3">
+                        <div class="mb-2">
+                            <strong>Message ID:</strong>
+                            @(message.MessageId ?? "Không có")
+                        </div>
+
+                        <div class="mb-2">
+                            <strong>Routing Key:</strong>
+                            @message.RoutingKey
+                        </div>
+
+                        <div class="mb-2">
+                            <strong>Nội dung:</strong>
+                        </div>
+
+                        <pre class="bg-light p-2 rounded text-wrap">@message.Body</pre>
+
+                        <button class="btn btn-sm btn-warning"
+                                @onclick="ReprocessMessage"
+                                disabled="@processing">
+                            Gửi xử lý lại message đầu tiên trong DLQ
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(actionMessage))
+{
+    <div class="alert alert-info mt-3">@actionMessage</div>
+}
+
 @code {
-    private string result = "đang gọi...";
+    private string result = "Đang gọi...";
+    private string? dlqError;
+    private string? actionMessage;
+    private string? selectedQueue;
+
+    private bool loading;
+    private bool loadingMessages;
+    private bool processing;
+
+    private List<DlqQueue> queues = new();
+    private List<DlqMessage> messages = new();
 
     protected override async Task OnInitializedAsync()
     {
-        try { result = (await Http.GetStringAsync("api/v1/users/admin-ping")).Trim('"'); }
-        catch (Exception ex) { result = "LỖI: " + ex.Message; }
+        try
+        {
+            result = (await Http.GetStringAsync(
+                "api/v1/users/admin-ping")).Trim('"');
+        }
+        catch (Exception ex)
+        {
+            result = "LỖI: " + ex.Message;
+        }
+
+        await LoadQueues();
+    }
+
+    private async Task LoadQueues()
+    {
+        loading = true;
+        dlqError = null;
+
+        try
+        {
+            queues = await Http.GetFromJsonAsync<List<DlqQueue>>(
+                "api/v1/admin/dlq") ?? new();
+        }
+        catch (Exception ex)
+        {
+            dlqError = "Không tải được danh sách DLQ: " + ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ViewMessages(string name)
+    {
+        selectedQueue = name;
+        messages.Clear();
+        actionMessage = null;
+        loadingMessages = true;
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<DlqResponse>(
+                $"api/v1/admin/dlq/{Uri.EscapeDataString(name)}");
+
+            messages = response?.Messages ?? new();
+        }
+        catch (Exception ex)
+        {
+            actionMessage = "Không tải được message: " + ex.Message;
+        }
+        finally
+        {
+            loadingMessages = false;
+        }
+    }
+
+    private async Task ReprocessMessage()
+    {
+        if (selectedQueue == null)
+            return;
+
+        processing = true;
+        actionMessage = null;
+
+        try
+        {
+            var response = await Http.PostAsync(
+                $"api/v1/admin/dlq/{Uri.EscapeDataString(selectedQueue)}/reprocess",
+                null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                actionMessage = "Đã gửi message về hàng đợi xử lý lại.";
+
+                await ViewMessages(selectedQueue);
+                await LoadQueues();
+            }
+            else
+            {
+                actionMessage = "Không xử lý lại được: " +
+                    await response.Content.ReadAsStringAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            actionMessage = "Lỗi: " + ex.Message;
+        }
+        finally
+        {
+            processing = false;
+        }
+    }
+
+    private void CloseMessages()
+    {
+        selectedQueue = null;
+        messages.Clear();
+    }
+
+    public class DlqQueue
+    {
+        public string Name { get; set; } = "";
+        public string DeadLetterQueue { get; set; } = "";
+        public uint MessageCount { get; set; }
+    }
+
+    public class DlqResponse
+    {
+        public string Queue { get; set; } = "";
+        public List<DlqMessage> Messages { get; set; } = new();
+    }
+
+    public class DlqMessage
+    {
+        public string? MessageId { get; set; }
+        public string RoutingKey { get; set; } = "";
+        public string Body { get; set; } = "";
     }
 }
