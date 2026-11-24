@@ -1,0 +1,367 @@
+﻿@page "/duyet-tin"
+
+@using Microsoft.AspNetCore.Authorization
+@using Client.Blazor.Services
+@using Microsoft.JSInterop
+
+@attribute [Authorize(Roles = "Admin")]
+
+@inject JobApiService JobApi
+@inject IJSRuntime JS
+
+<PageTitle>Duyệt tin tuyển dụng · JobPlatform</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            Duyệt tin tuyển dụng
+        </h2>
+
+        <p class="text-muted mb-0">
+            Kiểm tra nội dung trước khi công khai tin tuyển dụng.
+        </p>
+    </div>
+
+    <button class="btn btn-outline-primary"
+            disabled="@(loading || busy)"
+            @onclick="LoadAsync">
+
+        <i class="bi bi-arrow-clockwise me-2"></i>
+        Làm mới
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">
+        @success
+    </div>
+}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body d-flex align-items-center gap-3">
+
+        <div class="rounded bg-warning bg-opacity-10 p-3">
+            <i class="bi bi-hourglass-split text-warning fs-3"></i>
+        </div>
+
+        <div>
+            <div class="text-muted">
+                Số tin đang chờ xét duyệt
+            </div>
+
+            <h2 class="fw-bold text-primary mb-0">
+                @jobs.Count
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+
+    <div class="card-header py-3">
+        <h5 class="fw-bold mb-0">
+            Danh sách tin chờ duyệt
+        </h5>
+    </div>
+
+    <div class="card-body">
+
+        @if (loading)
+        {
+            <div class="text-center py-5">
+
+                <div class="spinner-border text-primary"></div>
+
+                <p class="text-muted mt-2">
+                    Đang tải dữ liệu...
+                </p>
+            </div>
+        }
+        else if (jobs.Count == 0 && error is null)
+        {
+            <div class="text-center py-5">
+
+                <i class="bi bi-check-circle text-success fs-1"></i>
+
+                <h5 class="mt-3">
+                    Không có tin chờ duyệt
+                </h5>
+
+                <p class="text-muted">
+                    Hiện tại không có tin tuyển dụng cần xử lý.
+                </p>
+            </div>
+        }
+        else
+        {
+            @foreach (var job in jobs)
+            {
+                <div class="border rounded p-3 mb-3"
+                     @key="job.Id">
+
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+
+                        <h5 class="fw-bold text-primary">
+                            @job.Title
+                        </h5>
+
+                        <span class="badge bg-warning text-dark align-self-start">
+                            Chờ xét duyệt
+                        </span>
+
+                    </div>
+
+                    <small class="text-muted">
+                        Ngày đăng:
+                        @(job.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))
+                    </small>
+
+                    <div class="mt-3">
+
+                        <h6 class="fw-semibold">
+                            Mô tả công việc
+                        </h6>
+
+                        <p style="white-space:pre-wrap; overflow-wrap:anywhere">
+                            @job.Description
+                        </p>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <h6 class="fw-semibold">
+                            Kỹ năng yêu cầu
+                        </h6>
+
+                        @foreach (var skill in job.Skills.Split(
+                            ',',
+                            StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            <span class="badge bg-light text-primary border me-1 mb-1">
+                                @skill.Trim()
+                            </span>
+                        }
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <h6 class="fw-semibold">
+                            Ngân sách
+                        </h6>
+
+                        <span class="text-success fw-bold">
+                            @JobUi.Money(job.BudgetMin)
+                            -
+                            @JobUi.Money(job.BudgetMax)
+                        </span>
+
+                    </div>
+
+                    <div class="small text-muted mb-3">
+                        Employer ID: @job.EmployerId
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap">
+
+                        <button class="btn btn-success"
+                                disabled="@busy"
+                                @onclick="() => ApproveAsync(job)">
+
+                            <i class="bi bi-check-circle me-2"></i>
+                            Duyệt tin
+
+                        </button>
+
+                        <button class="btn btn-outline-danger"
+                                disabled="@busy"
+                                @onclick="() => StartReject(job)">
+
+                            <i class="bi bi-x-circle me-2"></i>
+                            Từ chối
+
+                        </button>
+
+                    </div>
+
+                    @if (rejectingJobId == job.Id)
+                    {
+                        <div class="border rounded p-3 mt-3">
+
+                            <label class="form-label fw-semibold text-danger">
+                                Lý do từ chối
+                            </label>
+
+                            <textarea class="form-control mb-3"
+                                      rows="3"
+                                      maxlength="1000"
+                                      disabled="@busy"
+                                      placeholder="Nhập lý do từ chối tin tuyển dụng..."
+                                      @bind="rejectReason"
+                                      @bind:event="oninput"></textarea>
+
+                            <button class="btn btn-danger me-2"
+                                    disabled="@(busy || string.IsNullOrWhiteSpace(rejectReason))"
+                                    @onclick="RejectAsync">
+
+                                Xác nhận từ chối
+
+                            </button>
+
+                            <button class="btn btn-outline-secondary"
+                                    disabled="@busy"
+                                    @onclick="CancelReject">
+
+                                Hủy
+
+                            </button>
+
+                        </div>
+                    }
+
+                </div>
+            }
+        }
+
+    </div>
+</div>
+
+@code {
+
+    private List<JobItem> jobs = new();
+
+    private bool loading;
+    private bool busy;
+
+    private string? error;
+    private string? success;
+
+    private Guid? rejectingJobId;
+
+    private string rejectReason = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (loading) return;
+
+        loading = true;
+        error = null;
+
+        try
+        {
+            jobs = await JobApi.GetPendingJobsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            jobs.Clear();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ApproveAsync(JobItem job)
+    {
+        if (busy || loading) return;
+
+        busy = true;
+        error = null;
+        success = null;
+
+        try
+        {
+            var confirmed = await JS.InvokeAsync<bool>(
+                "confirm",
+                $"Bạn có chắc chắn muốn duyệt tin '{job.Title}' không?");
+
+            if (!confirmed)
+                return;
+
+            await JobApi.ApproveJobAsync(job.Id);
+
+            success = $"Đã duyệt tin '{job.Title}' thành công.";
+
+            CancelReject();
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void StartReject(JobItem job)
+    {
+        if (busy) return;
+
+        rejectingJobId = job.Id;
+        rejectReason = "";
+
+        error = null;
+        success = null;
+    }
+
+    private void CancelReject()
+    {
+        rejectingJobId = null;
+        rejectReason = "";
+    }
+
+    private async Task RejectAsync()
+    {
+        if (busy || !rejectingJobId.HasValue)
+            return;
+
+        if (string.IsNullOrWhiteSpace(rejectReason))
+        {
+            error = "Vui lòng nhập lý do từ chối.";
+            return;
+        }
+
+        busy = true;
+        error = null;
+        success = null;
+
+        try
+        {
+            await JobApi.RejectJobAsync(
+                rejectingJobId.Value,
+                rejectReason.Trim());
+
+            success = "Đã từ chối tin tuyển dụng thành công.";
+
+            CancelReject();
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

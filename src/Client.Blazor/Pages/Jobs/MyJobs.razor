@@ -1,0 +1,584 @@
+﻿@page "/tin-cua-toi"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Client.Blazor.Services
+
+@attribute [Authorize(Roles = "Employer")]
+
+@inject JobApiService JobApi
+@inject NavigationManager Nav
+@inject Microsoft.JSInterop.IJSRuntime JS
+@using Microsoft.JSInterop
+
+<PageTitle>Tin của tôi · JobPlatform</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap mb-4 gap-3">
+    <div>
+        <h2 class="fw-bold mb-1">Tin tuyển dụng của tôi</h2>
+        <p class="text-muted mb-0">
+            Quản lý các tin tuyển dụng bạn đã đăng.
+        </p>
+    </div>
+
+    <button class="btn btn-primary"
+            @onclick="CreateJob">
+        <i class="bi bi-plus-circle me-2"></i>
+        Đăng tin mới
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">@success</div>
+}
+
+<!-- THỐNG KÊ -->
+
+<div class="row g-3 mb-4">
+
+    <div class="col-md-3 col-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Tổng số tin</div>
+                <h3 class="fw-bold text-primary mb-0">
+                    @jobs.Count
+                </h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Chờ duyệt</div>
+                <h3 class="fw-bold text-warning mb-0">
+                    @jobs.Count(x => x.Status == "Pending")
+                </h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Đã duyệt</div>
+                <h3 class="fw-bold text-success mb-0">
+                    @jobs.Count(x => x.Status == "Approved")
+                </h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Đã đóng</div>
+                <h3 class="fw-bold text-secondary mb-0">
+                    @jobs.Count(x => x.Status == "Closed")
+                </h3>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- BỘ LỌC -->
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+
+        <div class="row g-3">
+
+            <div class="col-md-6">
+                <label class="form-label">
+                    Tìm kiếm tin tuyển dụng
+                </label>
+
+                <input class="form-control"
+                       placeholder="Nhập tiêu đề..."
+                       @bind="keyword"
+                       @bind:event="oninput" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">
+                    Trạng thái
+                </label>
+
+                <select class="form-select"
+                        @bind="statusFilter">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="Pending">Chờ duyệt</option>
+                    <option value="Approved">Đã duyệt</option>
+                    <option value="Rejected">Đã từ chối</option>
+                    <option value="Closed">Đã đóng</option>
+                </select>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-outline-primary w-100"
+                        disabled="@(loading || busy)"
+                        @onclick="LoadAsync">
+
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Làm mới
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- DANH SÁCH TIN -->
+
+<div class="card shadow-sm">
+
+    <div class="card-header bg-white py-3">
+        <h5 class="fw-bold mb-0">
+            Danh sách tin tuyển dụng
+        </h5>
+    </div>
+
+    <div class="card-body">
+
+        @if (loading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary"></div>
+                <p class="text-muted mt-2">Đang tải dữ liệu...</p>
+            </div>
+        }
+        else if (!FilteredJobs.Any())
+        {
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-1"></i>
+                <p class="mt-3">Không có tin tuyển dụng phù hợp.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+
+                <table class="table table-hover align-middle">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tiêu đề</th>
+                            <th>Ngân sách</th>
+                            <th>Trạng thái</th>
+                            <th>Ngày đăng</th>
+                            <th>Thao tác</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var job in FilteredJobs)
+                        {
+                            <tr>
+
+                                <td style="min-width:200px">
+                                    <div class="fw-semibold">
+                                        @job.Title
+                                    </div>
+
+                                    <small class="text-muted">
+                                        @job.Skills
+                                    </small>
+
+                                    @if (!string.IsNullOrWhiteSpace(job.RejectionReason))
+                                    {
+                                        <div class="small text-danger mt-1">
+                                            Lý do từ chối:
+                                            @job.RejectionReason
+                                        </div>
+                                    }
+                                </td>
+
+                                <td>
+                                    @JobUi.Money(job.BudgetMin)
+                                    <br />
+                                    @JobUi.Money(job.BudgetMax)
+                                </td>
+
+                                <td>
+                                    <span class="badge @JobUi.StatusClass(job.Status)">
+                                        @JobUi.StatusLabel(job.Status)
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @job.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")
+                                </td>
+
+                                <td>
+                                    <div class="d-flex flex-wrap gap-2">
+
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                disabled="@busy"
+                                                @onclick="() => ViewDetails(job)">
+                                            <i class="bi bi-eye"></i>
+                                            Xem
+                                        </button>
+
+                                        @if (job.Status != "Closed")
+                                        {
+                                            <button class="btn btn-sm btn-outline-warning"
+                                                    disabled="@busy"
+                                                    @onclick="() => StartEdit(job)">
+                                                <i class="bi bi-pencil"></i>
+                                                Sửa
+                                            </button>
+
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    disabled="@busy"
+                                                    @onclick="() => CloseJobAsync(job)">
+                                                <i class="bi bi-x-circle"></i>
+                                                Đóng
+                                            </button>
+                                        }
+
+                                        <button class="btn btn-sm btn-outline-success"
+                                                disabled="@busy"
+                                                @onclick="() => ViewApplicants(job.Id)">
+                                            <i class="bi bi-people"></i>
+                                            Ứng viên
+                                        </button>
+
+                                    </div>
+                                </td>
+
+                            </tr>
+                        }
+                    </tbody>
+
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- CHI TIẾT TIN -->
+
+@if (selectedJob is not null)
+{
+    <div class="card shadow-sm mt-4">
+
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+
+            <h5 class="fw-bold mb-0">Chi tiết tin tuyển dụng</h5>
+
+            <button class="btn-close"
+                    @onclick="CloseDetails">
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            <h4>@selectedJob.Title</h4>
+
+            <span class="badge @JobUi.StatusClass(selectedJob.Status)">
+                @JobUi.StatusLabel(selectedJob.Status)
+            </span>
+
+            <h6 class="mt-3">Mô tả công việc</h6>
+
+            <p style="white-space:pre-wrap">@selectedJob.Description</p>
+
+            <h6>Kỹ năng yêu cầu</h6>
+
+            <p>@selectedJob.Skills</p>
+
+            <h6>Ngân sách</h6>
+
+            <p class="text-primary fw-semibold">
+                @JobUi.Money(selectedJob.BudgetMin)
+                -
+                @JobUi.Money(selectedJob.BudgetMax)
+            </p>
+
+        </div>
+    </div>
+}
+
+<!-- FORM CHỈNH SỬA -->
+
+@if (editingJobId.HasValue)
+{
+    <div class="card shadow-sm mt-4">
+
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+
+            <h5 class="fw-bold mb-0">Chỉnh sửa tin tuyển dụng</h5>
+
+            <button class="btn-close"
+                    disabled="@busy"
+                    @onclick="CancelEdit">
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            <EditForm Model="@editForm"
+                      OnValidSubmit="@SaveEditAsync">
+
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="mb-3">
+
+                    <label class="form-label">Tiêu đề</label>
+
+                    <InputText class="form-control"
+                               @bind-Value="editForm.Title" />
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label class="form-label">Mô tả</label>
+
+                    <InputTextArea class="form-control"
+                                   rows="5"
+                                   @bind-Value="editForm.Description" />
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label class="form-label">Kỹ năng</label>
+
+                    <InputText class="form-control"
+                               @bind-Value="editForm.Skills" />
+
+                </div>
+
+                <div class="row">
+
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Ngân sách tối thiểu
+                        </label>
+
+                        <InputNumber class="form-control"
+                                     @bind-Value="editForm.BudgetMin" />
+
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Ngân sách tối đa
+                        </label>
+
+                        <InputNumber class="form-control"
+                                     @bind-Value="editForm.BudgetMax" />
+
+                    </div>
+
+                </div>
+
+                <div class="alert alert-info">
+                    Sau khi chỉnh sửa, tin tuyển dụng sẽ được
+                    chuyển về trạng thái chờ Admin xét duyệt.
+                </div>
+
+                <button type="submit"
+                        class="btn btn-primary me-2"
+                        disabled="@busy">
+                    Lưu thay đổi
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@busy"
+                        @onclick="CancelEdit">
+                    Hủy
+                </button>
+
+            </EditForm>
+
+        </div>
+    </div>
+}
+
+@code {
+
+    private List<JobItem> jobs = new();
+
+    private string keyword = "";
+    private string statusFilter = "";
+
+    private bool loading;
+    private bool busy;
+
+    private string? error;
+    private string? success;
+
+    private JobItem? selectedJob;
+
+    private Guid? editingJobId;
+
+    private JobForm editForm = new();
+
+    private IEnumerable<JobItem> FilteredJobs =>
+        jobs.Where(job =>
+            (string.IsNullOrWhiteSpace(keyword) ||
+             job.Title.Contains(
+                 keyword,
+                 StringComparison.OrdinalIgnoreCase)) &&
+
+            (string.IsNullOrWhiteSpace(statusFilter) ||
+             job.Status == statusFilter));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+
+        try
+        {
+            jobs = await JobApi.GetMyJobsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void CreateJob()
+    {
+        Nav.NavigateTo("dang-tin");
+    }
+
+    private void ViewDetails(JobItem job)
+    {
+        selectedJob = job;
+        CancelEdit();
+    }
+
+    private void CloseDetails()
+    {
+        selectedJob = null;
+    }
+
+    private void StartEdit(JobItem job)
+    {
+        selectedJob = null;
+
+        error = null;
+        success = null;
+
+        editingJobId = job.Id;
+
+        editForm = new JobForm
+        {
+            Title = job.Title,
+            Description = job.Description,
+            Skills = job.Skills,
+            BudgetMin = job.BudgetMin,
+            BudgetMax = job.BudgetMax
+        };
+    }
+
+    private void CancelEdit()
+    {
+        editingJobId = null;
+        editForm = new JobForm();
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (!editingJobId.HasValue || busy)
+            return;
+
+        error = null;
+        success = null;
+
+        if (editForm.BudgetMin > editForm.BudgetMax)
+        {
+            error = "Khoảng ngân sách không hợp lệ.";
+            return;
+        }
+
+        busy = true;
+
+        try
+        {
+            await JobApi.UpdateJobAsync(
+                editingJobId.Value,
+                editForm);
+
+            success = "Cập nhật tin thành công. Tin đang chờ xét duyệt.";
+
+            CancelEdit();
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CloseJobAsync(JobItem job)
+    {
+        if (busy) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Bạn có chắc chắn muốn đóng tin '{job.Title}' không?");
+
+        if (!confirmed || busy) return;
+
+        busy = true;
+        error = null;
+        success = null;
+
+        try
+        {
+            await JobApi.CloseJobAsync(job.Id);
+
+            success = "Đã đóng tin tuyển dụng thành công.";
+
+            CloseDetails();
+            CancelEdit();
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ViewApplicants(Guid jobId)
+    {
+        Nav.NavigateTo($"ung-vien?jobId={jobId}");
+    }
+}

@@ -1,0 +1,648 @@
+﻿@page "/ung-vien"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@using Client.Blazor.Services
+
+@attribute [Authorize(Roles = "Employer")]
+
+@inject JobApiService JobApi
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Quản lý ứng viên · JobPlatform</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">Quản lý ứng viên</h2>
+        <p class="text-muted mb-0">
+            Xem xét và lựa chọn Freelancer phù hợp với công việc.
+        </p>
+    </div>
+
+    <button class="btn btn-outline-primary"
+            disabled="@busy"
+            @onclick="GoToMyJobs">
+        <i class="bi bi-arrow-left me-2"></i>
+        Tin của tôi
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">
+        <i class="bi bi-check-circle me-2"></i>
+        @success
+    </div>
+}
+
+<!-- CHỌN TIN TUYỂN DỤNG -->
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header py-3">
+        <h5 class="fw-bold mb-0">
+            <i class="bi bi-briefcase text-primary me-2"></i>
+            Chọn tin tuyển dụng
+        </h5>
+    </div>
+
+    <div class="card-body">
+        <div class="row g-3">
+
+            <div class="col-md-10">
+                <label class="form-label">
+                    Công việc cần xem ứng viên
+                </label>
+
+                <select class="form-select"
+                        value="@selectedJobId"
+                        @onchange="OnJobChanged"
+                        disabled="@(loading || busy)">
+
+                    <option value="">
+                        -- Chọn tin tuyển dụng --
+                    </option>
+
+                    @foreach (var job in jobs)
+                    {
+                        <option value="@job.Id">
+                            @job.Title - @JobUi.StatusLabel(job.Status)
+                        </option>
+                    }
+
+                </select>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-outline-primary w-100"
+                        disabled="@(loading || busy)"
+                        @onclick="RefreshAsync">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Làm mới
+                </button>
+            </div>
+
+        </div>
+
+        @if (SelectedJob is not null)
+        {
+            <div class="border rounded p-3 mt-3">
+
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="fw-bold text-primary mb-0">
+                        @SelectedJob.Title
+                    </h5>
+
+                    <span class="badge @JobUi.StatusClass(SelectedJob.Status)">
+                        @JobUi.StatusLabel(SelectedJob.Status)
+                    </span>
+                </div>
+
+                <p class="text-muted mt-2 mb-2">
+                    Kỹ năng: @SelectedJob.Skills
+                </p>
+
+                <div class="fw-semibold text-success">
+                    @JobUi.Money(SelectedJob.BudgetMin)
+                    -
+                    @JobUi.Money(SelectedJob.BudgetMax)
+                </div>
+
+            </div>
+        }
+    </div>
+</div>
+
+@if (loading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+        <p class="text-muted mt-2">Đang tải dữ liệu...</p>
+    </div>
+}
+else if (SelectedJob is null)
+{
+    <div class="card shadow-sm">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-people fs-1 text-muted"></i>
+
+            <h5 class="mt-3">
+                Vui lòng chọn tin tuyển dụng
+            </h5>
+
+            <p class="text-muted">
+                Danh sách ứng viên sẽ xuất hiện sau khi chọn công việc.
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    <!-- THỐNG KÊ -->
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-people fs-3 text-primary"></i>
+                    <div class="text-muted mt-2">
+                        Tổng ứng viên
+                    </div>
+                    <h3 class="fw-bold text-primary">
+                        @applications.Count
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-hourglass-split fs-3 text-warning"></i>
+                    <div class="text-muted mt-2">
+                        Chờ xử lý
+                    </div>
+                    <h3 class="fw-bold text-warning">
+                        @applications.Count(x => x.Status == "Pending")
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-check-circle fs-3 text-success"></i>
+                    <div class="text-muted mt-2">
+                        Đã chấp nhận
+                    </div>
+                    <h3 class="fw-bold text-success">
+                        @applications.Count(x => x.Status == "Accepted")
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-x-circle fs-3 text-danger"></i>
+                    <div class="text-muted mt-2">
+                        Đã từ chối
+                    </div>
+                    <h3 class="fw-bold text-danger">
+                        @applications.Count(x => x.Status == "Rejected")
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- BỘ LỌC -->
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+
+                <div class="col-md-7">
+                    <label class="form-label">
+                        Tìm kiếm ứng viên
+                    </label>
+
+                    <input class="form-control"
+                           placeholder="Mã Freelancer hoặc thư ứng tuyển..."
+                           @bind="keyword"
+                           @bind:event="oninput" />
+                </div>
+
+                <div class="col-md-5">
+                    <label class="form-label">
+                        Trạng thái đơn
+                    </label>
+
+                    <select class="form-select"
+                            @bind="statusFilter">
+
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="Pending">Chờ xử lý</option>
+                        <option value="Accepted">Đã chấp nhận</option>
+                        <option value="Rejected">Đã từ chối</option>
+
+                    </select>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- DANH SÁCH ỨNG VIÊN -->
+
+    <div class="card shadow-sm">
+
+        <div class="card-header py-3">
+            <h5 class="fw-bold mb-0">
+                Danh sách ứng viên
+            </h5>
+        </div>
+
+        <div class="card-body">
+
+            @if (!FilteredApplications.Any())
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+
+                    <h5 class="mt-3">
+                        Không có ứng viên phù hợp
+                    </h5>
+
+                    <p class="text-muted">
+                        Chưa có đơn ứng tuyển hoặc không có kết quả theo bộ lọc.
+                    </p>
+                </div>
+            }
+            else
+            {
+                @foreach (var application in FilteredApplications)
+                {
+                    <div class="border rounded p-3 mb-3"
+                         @key="application.Id">
+
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+
+                            <div class="d-flex align-items-center gap-3">
+
+                                <div class="rounded-circle bg-primary bg-opacity-10 p-3">
+                                    <i class="bi bi-person fs-4 text-primary"></i>
+                                </div>
+
+                                <div>
+                                    <h6 class="fw-bold mb-1">
+                                        Freelancer @ShortId(application.FreelancerId)
+                                    </h6>
+
+                                    <small class="text-muted">
+                                        Ngày ứng tuyển:
+                                        @(application.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))
+                                    </small>
+                                </div>
+
+                            </div>
+
+                            <span class="badge @JobUi.StatusClass(application.Status)">
+                                @JobUi.StatusLabel(application.Status)
+                            </span>
+
+                        </div>
+
+                        <div class="mt-3">
+                            <h6 class="fw-semibold">Thư ứng tuyển</h6>
+
+                            <p style="white-space:pre-wrap; overflow-wrap:anywhere">
+                                @application.CoverLetter
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            <h6 class="fw-semibold">
+                                Ngân sách đề xuất
+                            </h6>
+
+                            <span class="text-success fw-bold fs-5">
+                                @JobUi.Money(application.ProposedBudget)
+                            </span>
+                        </div>
+
+                        <div class="small text-muted mb-3"
+                             style="overflow-wrap:anywhere">
+                            Freelancer ID: @application.FreelancerId
+                            <br />
+                            Application ID: @application.Id
+                        </div>
+
+                        @if (application.Status == "Pending")
+                        {
+                            <div class="d-flex gap-2 flex-wrap">
+
+                                <button class="btn btn-success"
+                                        disabled="@(busy || SelectedJob?.Status != "Approved")"
+                                        @onclick="() => AcceptAsync(application)">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    Chấp nhận
+                                </button>
+
+                                <button class="btn btn-outline-danger"
+                                        disabled="@busy"
+                                        @onclick="() => StartReject(application)">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Từ chối
+                                </button>
+
+                            </div>
+
+                            @if (SelectedJob?.Status != "Approved")
+                            {
+                                <div class="small text-warning mt-2">
+                                    Chỉ được chấp nhận ứng viên khi tin đã được duyệt.
+                                </div>
+                            }
+                        }
+                        else if (application.Status == "Accepted")
+                        {
+                            <div class="alert alert-success mb-0">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Ứng viên đã được chấp nhận.
+                            </div>
+                        }
+                        else if (application.Status == "Rejected")
+                        {
+                            <div class="alert alert-danger mb-0">
+
+                                <strong>Đã từ chối ứng viên.</strong>
+
+                                @if (!string.IsNullOrWhiteSpace(application.RejectionReason))
+                                {
+                                    <div class="mt-2">
+                                        Lý do: @application.RejectionReason
+                                    </div>
+                                }
+
+                            </div>
+                        }
+
+                        @if (rejectingApplicationId == application.Id &&
+                             application.Status == "Pending")
+                        {
+                            <div class="border rounded p-3 mt-3">
+
+                                <label class="form-label fw-semibold text-danger">
+                                    Lý do từ chối ứng viên
+                                </label>
+
+                                <textarea class="form-control mb-3"
+                                          rows="4"
+                                          maxlength="1000"
+                                          disabled="@busy"
+                                          placeholder="Nhập lý do từ chối..."
+                                          @bind="rejectReason"
+                                          @bind:event="oninput"></textarea>
+
+                                <div class="small text-muted mb-3">
+                                    @rejectReason.Length / 1000 ký tự
+                                </div>
+
+                                <button class="btn btn-danger me-2"
+                                        disabled="@(busy || string.IsNullOrWhiteSpace(rejectReason))"
+                                        @onclick="RejectAsync">
+                                    Xác nhận từ chối
+                                </button>
+
+                                <button class="btn btn-outline-secondary"
+                                        disabled="@busy"
+                                        @onclick="CancelReject">
+                                    Hủy
+                                </button>
+
+                            </div>
+                        }
+
+                    </div>
+                }
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "jobId")]
+    public Guid? JobId { get; set; }
+
+    private List<JobItem> jobs = new();
+
+    private List<ApplicationItem> applications = new();
+
+    private string selectedJobId = "";
+    private string keyword = "";
+    private string statusFilter = "";
+
+    private bool loading;
+    private bool busy;
+
+    private string? error;
+    private string? success;
+
+    private Guid? rejectingApplicationId;
+    private string rejectReason = "";
+
+    private JobItem? SelectedJob =>
+        Guid.TryParse(selectedJobId, out var id)
+            ? jobs.FirstOrDefault(x => x.Id == id)
+            : null;
+
+    private IEnumerable<ApplicationItem> FilteredApplications =>
+        applications.Where(application =>
+
+            (string.IsNullOrWhiteSpace(keyword) ||
+
+             application.FreelancerId.ToString().Contains(
+                 keyword,
+                 StringComparison.OrdinalIgnoreCase) ||
+
+             application.CoverLetter.Contains(
+                 keyword,
+                 StringComparison.OrdinalIgnoreCase)) &&
+
+            (string.IsNullOrWhiteSpace(statusFilter) ||
+
+             application.Status == statusFilter));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        selectedJobId = JobId?.ToString() ?? "";
+
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (loading || busy) return;
+
+        loading = true;
+        error = null;
+
+        applications.Clear();
+
+        CancelReject();
+
+        try
+        {
+            jobs = await JobApi.GetMyJobsAsync();
+
+            if (SelectedJob is not null)
+            {
+                applications =
+                    await JobApi.GetApplicantsAsync(
+                        SelectedJob.Id);
+            }
+            else if (JobId.HasValue)
+            {
+                error = "Không tìm thấy tin tuyển dụng thuộc tài khoản của bạn.";
+                selectedJobId = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            applications.Clear();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void OnJobChanged(ChangeEventArgs e)
+    {
+        selectedJobId = e.Value?.ToString() ?? "";
+
+        keyword = "";
+        statusFilter = "";
+        success = null;
+
+        CancelReject();
+
+        if (Guid.TryParse(selectedJobId, out var id))
+        {
+            Nav.NavigateTo($"ung-vien?jobId={id}");
+        }
+        else
+        {
+            Nav.NavigateTo("ung-vien");
+        }
+    }
+
+    private async Task AcceptAsync(ApplicationItem application)
+    {
+        if (busy || loading ||
+            application.Status != "Pending" ||
+            SelectedJob?.Status != "Approved")
+        {
+            return;
+        }
+
+        busy = true;
+        error = null;
+        success = null;
+
+        try
+        {
+            var confirmed = await JS.InvokeAsync<bool>(
+                "confirm",
+                "Bạn có chắc chắn muốn chấp nhận ứng viên này không?");
+
+            if (!confirmed) return;
+
+            var updated =
+                await JobApi.AcceptAsync(application.Id);
+
+            UpdateApplication(updated);
+
+            success = "Chấp nhận ứng viên thành công.";
+
+            CancelReject();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void StartReject(ApplicationItem application)
+    {
+        if (busy || application.Status != "Pending")
+            return;
+
+        rejectingApplicationId = application.Id;
+
+        rejectReason = "";
+        error = null;
+        success = null;
+    }
+
+    private void CancelReject()
+    {
+        rejectingApplicationId = null;
+        rejectReason = "";
+    }
+
+    private async Task RejectAsync()
+    {
+        if (busy || !rejectingApplicationId.HasValue)
+            return;
+
+        if (string.IsNullOrWhiteSpace(rejectReason))
+        {
+            error = "Vui lòng nhập lý do từ chối.";
+            return;
+        }
+
+        busy = true;
+        error = null;
+        success = null;
+
+        try
+        {
+            var updated = await JobApi.RejectAsync(
+                rejectingApplicationId.Value,
+                rejectReason.Trim());
+
+            UpdateApplication(updated);
+
+            success = "Đã từ chối ứng viên thành công.";
+
+            CancelReject();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void UpdateApplication(ApplicationItem updated)
+    {
+        var index = applications.FindIndex(
+            x => x.Id == updated.Id);
+
+        if (index >= 0)
+        {
+            applications[index] = updated;
+        }
+    }
+
+    private static string ShortId(Guid id)
+    {
+        return id.ToString("N")[..8].ToUpperInvariant();
+    }
+
+    private void GoToMyJobs()
+    {
+        Nav.NavigateTo("tin-cua-toi");
+    }
+}
