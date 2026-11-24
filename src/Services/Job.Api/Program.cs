@@ -1,3 +1,4 @@
+using Job.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Job.Api.Data;
 using Shared.Infrastructure.Extensions;
@@ -23,6 +24,14 @@ builder.Services.AddJobPlatformAuth(builder.Configuration);
 // RabbitMQ và Outbox
 builder.Services.AddRabbitMq(builder.Configuration);
 builder.Services.AddOutboxPublisher<JobDbContext>();
+builder.Services.AddHttpClient<IdentityClient>(client =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["Services:Identity"]
+        ?? "http://localhost:5001/");
+
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 
 var app = builder.Build();
 
