@@ -1,3 +1,4 @@
+
 namespace Shared.Contracts.Events;
 
 public record ApplicationAcceptedEvent(
@@ -9,6 +10,5 @@ public record ApplicationAcceptedEvent(
     decimal ProposedBudget
 ) : IntegrationEvent
 {
-    public override string EventType
-        => "ApplicationAccepted";
+    public override string EventType => "ApplicationAccepted";
 }

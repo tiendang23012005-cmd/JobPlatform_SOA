@@ -1,3 +1,4 @@
+
 x-service: &svc
   restart: unless-stopped
   depends_on:
@@ -43,6 +44,7 @@ services:
       ConnectionStrings__Default: "Server=sqlserver;Database=IdentityDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
       Jwt__Key: "${JWT_KEY}"
       RabbitMq__Host: rabbitmq
+      InternalApi__Key: "${INTERNAL_API_KEY}"
     ports: ["5001:8080"]
 
   job-api:
@@ -102,6 +104,8 @@ services:
       ConnectionStrings__Default: "Server=sqlserver;Database=NotificationDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
       Jwt__Key: "${JWT_KEY}"
       RabbitMq__Host: rabbitmq
+      Services__Identity: "http://identity-api:8080/"
+      InternalApi__Key: "${INTERNAL_API_KEY}"
       Smtp__Host: "${SMTP_HOST:-}"
       Smtp__Port: "${SMTP_PORT:-587}"
       Smtp__User: "${SMTP_USER:-}"
