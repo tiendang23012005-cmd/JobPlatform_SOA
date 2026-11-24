@@ -7,6 +7,18 @@ public record MenuSection(string Title, MenuItem[] Items);
 
 public static class Ui
 {
+    private static readonly System.Globalization.NumberFormatInfo VndFormat = new() { NumberGroupSeparator = "." };
+
+    public static string Vnd(decimal amount) => amount.ToString("N0", VndFormat) + " ₫";
+
+    public static string TopUpStatusLabel(string status) => status switch
+    {
+        Shared.Contracts.Payments.TopUpStatus.Pending => "Đang chờ thanh toán",
+        Shared.Contracts.Payments.TopUpStatus.Success => "Thành công",
+        Shared.Contracts.Payments.TopUpStatus.Failed => "Thất bại",
+        _ => "Không xác định"
+    };
+
     public static string Initials(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "?";
@@ -53,7 +65,7 @@ public static class MenuCatalog
                 new MenuItem("bi-send", "Đơn ứng tuyển", "don-ung-tuyen"),
                 new MenuItem("bi-file-earmark-text", "Hợp đồng", "soon/hop-dong"),
             }),
-            new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví và thanh toán", "soon/vi") }),
+            new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví điện tử", "soon/vi") }),
             Account
         },
         "Employer" => new[]
@@ -66,7 +78,7 @@ public static class MenuCatalog
                 new MenuItem("bi-people", "Ứng viên", "ung-vien"),
                 new MenuItem("bi-file-earmark-text", "Hợp đồng", "soon/hop-dong"),
             }),
-            new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví và ký quỹ", "soon/vi") }),
+            new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví điện tử", "soon/vi") }),
             Account
         },
         "Admin" => new[]
@@ -79,6 +91,7 @@ public static class MenuCatalog
                 new MenuItem("bi-people", "Quản lý người dùng", "soon/nguoi-dung"),
                 new MenuItem("bi-shield-exclamation", "Tranh chấp", "soon/tranh-chap"),
                 new MenuItem("bi-receipt", "Giao dịch", "soon/giao-dich"),
+                new MenuItem("bi-wallet2", "Ví điện tử", "soon/vi"),
             }),
             Account
         },

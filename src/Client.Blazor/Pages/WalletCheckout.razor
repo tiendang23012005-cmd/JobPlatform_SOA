@@ -1,0 +1,71 @@
+@page "/vi/nap-tien/{Id:guid}"
+@attribute [Authorize]
+@using Shared.Contracts.Payments
+@inject WalletApiService Api
+
+<PageTitle>Thanh toán mô phỏng · JobPlatform</PageTitle>
+<div class="jp-page-head"><h1>Cổng thanh toán mô phỏng</h1></div>
+@if (error is not null) { <div class="alert alert-danger" role="alert">@error</div> }
+@if (loading) { <p role="status">Đang tải yêu cầu nạp tiền...</p> }
+else if (payment is not null)
+{
+    <section class="card mb-3"><div class="card-body">
+        <h2 class="h5">@Ui.Vnd(payment.Amount)</h2>
+        <p class="text-break text-muted">Mã yêu cầu @payment.Id</p>
+        @if (payment.Status == TopUpStatus.Pending)
+        {
+            <p role="status">@Ui.TopUpStatusLabel(payment.Status)</p>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-primary" disabled="@saving" @onclick="() => Complete(true)">
+                    @(saving ? "Đang xử lý..." : "Xác nhận thanh toán")
+                </button>
+                <button class="btn btn-outline-danger" disabled="@saving" @onclick="() => Complete(false)">Hủy thanh toán</button>
+            </div>
+        }
+        else if (payment.Status == TopUpStatus.Success)
+        {
+            <p class="alert alert-success mb-0" role="status">Đã nạp @Ui.Vnd(payment.Amount) vào ví.</p>
+        }
+        else if (payment.Status == TopUpStatus.Failed)
+        {
+            <p class="alert alert-warning mb-0" role="status">Thanh toán thất bại hoặc đã hủy. Số dư ví được giữ nguyên.</p>
+        }
+    </div></section>
+}
+@if (!loading && (payment is null || payment.Status == TopUpStatus.Pending))
+{
+    <button class="btn btn-light-blue" disabled="@saving" @onclick="Load">Kiểm tra trạng thái</button>
+}
+<a class="btn btn-light-blue" href="soon/vi">Về ví điện tử</a>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private WalletTopUpItem? payment;
+    private bool loading, saving;
+    private string? error;
+
+    protected override Task OnParametersSetAsync()
+    {
+        payment = null;
+        return Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        try { payment = await Api.GetTopUpAsync(Id); }
+        catch (Exception ex) { error = WalletApiService.Error(ex); }
+        finally { loading = false; }
+    }
+
+    private async Task Complete(bool success)
+    {
+        if (saving) return;
+        saving = true;
+        error = null;
+        try { payment = await Api.CompleteMockAsync(Id, success); }
+        catch (Exception ex) { error = WalletApiService.Error(ex); }
+        finally { saving = false; }
+    }
+}

@@ -45,25 +45,25 @@ public class OutboxPublisherService<TContext>(
     {
         while (!ct.IsCancellationRequested)
         {
-            var found = 0;
+            var waitBeforePolling = true;
             try
             {
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<TContext>();
                 var batch = await db.OutboxMessages.Where(m => m.PublishedAt == null)
                     .OrderBy(m => m.CreatedAt).Take(50).ToListAsync(ct);
-                found = batch.Count;
                 foreach (var m in batch)
                 {
                     mq.Publish(m.EventType, Encoding.UTF8.GetBytes(m.Payload), m.Id);
                     m.PublishedAt = DateTime.UtcNow;
                     await db.SaveChangesAsync(ct);
                 }
+                waitBeforePolling = batch.Count == 0;
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { log.LogWarning("Outbox chưa phát được: {Msg}", ex.Message); }
 
-            if (found == 0)
+            if (waitBeforePolling)
             {
                 try { await Task.Delay(2000, ct); } catch (OperationCanceledException) { break; }
             }
