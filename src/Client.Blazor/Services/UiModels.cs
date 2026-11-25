@@ -88,7 +88,7 @@ public static class MenuCatalog
             {
                 new MenuItem("bi-speedometer2", "Hệ thống", "admin"),
                 new MenuItem("bi-patch-check", "Duyệt tin tuyển dụng", "duyet-tin"),
-                new MenuItem("bi-people", "Quản lý người dùng", "soon/nguoi-dung"),
+                new MenuItem("bi-people", "Quản lý người dùng", "admin/users"),
                 new MenuItem("bi-shield-exclamation", "Tranh chấp", "soon/tranh-chap"),
                 new MenuItem("bi-receipt", "Giao dịch", "soon/giao-dich"),
                 new MenuItem("bi-wallet2", "Ví điện tử", "soon/vi"),

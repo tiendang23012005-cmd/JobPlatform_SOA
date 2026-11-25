@@ -1,0 +1,139 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+
+<PageTitle>Quản lý người dùng · JobPlatform</PageTitle>
+<div class="jp-page-head d-flex flex-wrap justify-content-between align-items-end gap-3">
+    <div><h1>Quản lý người dùng</h1><p>Tìm kiếm, lọc và quản lý trạng thái tài khoản trong hệ thống.</p></div>
+    <span class="jp-chip"><i class="bi bi-people me-1"></i>@totalItems tài khoản</span>
+</div>
+@if (!string.IsNullOrWhiteSpace(message)) { <div class="alert alert-success">@message</div> }
+@if (!string.IsNullOrWhiteSpace(error)) { <div class="alert alert-danger">@error</div> }
+<div class="card">
+    <div class="card-body">
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-12 col-lg-5"><label class="form-label">Tìm theo họ tên hoặc email</label><input class="form-control" @bind="search" @bind:event="oninput" @onkeydown="HandleSearchKey" placeholder="Nhập từ khóa..." /></div>
+            <div class="col-6 col-lg-2"><label class="form-label">Vai trò</label><select class="form-select" @bind="role"><option value="">Tất cả</option><option value="Freelancer">Freelancer</option><option value="Employer">Nhà tuyển dụng</option><option value="Admin">Admin</option></select></div>
+            <div class="col-6 col-lg-2"><label class="form-label">Trạng thái</label><select class="form-select" @bind="status"><option value="">Tất cả</option><option value="Active">Hoạt động</option><option value="Locked">Đã khóa</option><option value="PendingVerification">Chờ xác minh</option></select></div>
+            <div class="col-12 col-lg-3 d-flex gap-2"><button class="btn btn-primary flex-fill" @onclick="SearchUsers"><i class="bi bi-search me-1"></i>Tìm kiếm</button><button class="btn btn-outline-secondary" @onclick="ResetFilters">Xóa lọc</button></div>
+        </div>
+        @if (loading)
+        {
+            <p class="text-muted py-4 text-center">Đang tải danh sách...</p>
+        }
+        else if (users.Count == 0)
+        {
+            <div class="text-center text-muted py-5"><i class="bi bi-person-x fs-2"></i><p class="mb-0 mt-2">Không tìm thấy người dùng phù hợp.</p></div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead><tr><th>Người dùng</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày tạo</th><th class="text-end">Thao tác</th></tr></thead>
+                    <tbody>
+                        @foreach (var user in users)
+                        {
+                            <tr>
+                                <td><div class="fw-semibold">@(string.IsNullOrWhiteSpace(user.FullName) ? "Chưa cập nhật tên" : user.FullName)</div><div class="small text-muted">@user.Email</div><div class="small text-muted">@user.Phone</div></td>
+                                <td>@Ui.RoleLabel(user.Role)</td>
+                                <td><span class="jp-chip @(user.Status == "Active" ? "ok" : user.Status == "Locked" ? "admin" : "")">@StatusLabel(user.Status)</span></td>
+                                <td class="small">@user.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-end">
+                                    @if (user.Role != "Admin" && user.IsVerified)
+                                    {
+                                        @if (user.Status == "Locked")
+                                        {
+                                            <button class="btn btn-sm btn-outline-success" disabled="@busyIds.Contains(user.Id)" @onclick="() => ChangeStatus(user, false)"><i class="bi bi-unlock me-1"></i>Mở khóa</button>
+                                        }
+                                        else if (user.Status == "Active")
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" disabled="@busyIds.Contains(user.Id)" @onclick="() => ChangeStatus(user, true)"><i class="bi bi-lock me-1"></i>Khóa</button>
+                                        }
+                                    }
+                                    else if (user.Role == "Admin") { <span class="small text-muted">Tài khoản quản trị</span> }
+                                    else { <span class="small text-muted">Chưa xác minh</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span class="small text-muted">Trang @(page) / @Math.Max(totalPages, 1) · @totalItems kết quả</span>
+                <div class="btn-group"><button class="btn btn-outline-secondary btn-sm" disabled="@(page <= 1)" @onclick="PreviousPage">Trước</button><button class="btn btn-outline-secondary btn-sm" disabled="@(page >= totalPages)" @onclick="NextPage">Tiếp</button></div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<UserRow> users = [];
+    private readonly HashSet<Guid> busyIds = [];
+    private string search = "", role = "", status = "";
+    private string? message, error;
+    private bool loading;
+    private int page = 1, pageSize = 10, totalItems, totalPages;
+
+    protected override Task OnInitializedAsync() => LoadUsers();
+
+    private async Task LoadUsers()
+    {
+        loading = true; error = null;
+        try
+        {
+            var url = $"api/v1/users?page={page}&pageSize={pageSize}&search={Uri.EscapeDataString(search)}&role={Uri.EscapeDataString(role)}&status={Uri.EscapeDataString(status)}";
+            var result = await Http.GetFromJsonAsync<PagedUsers>(url);
+            users = result?.Items ?? [];
+            totalItems = result?.TotalItems ?? 0;
+            totalPages = result?.TotalPages ?? 0;
+        }
+        catch (Exception ex) { error = "Không tải được danh sách người dùng: " + ex.Message; }
+        finally { loading = false; }
+    }
+
+    private async Task SearchUsers() { page = 1; message = null; await LoadUsers(); }
+    private async Task ResetFilters() { search = role = status = ""; page = 1; message = null; await LoadUsers(); }
+    private async Task PreviousPage() { if (page > 1) { page--; await LoadUsers(); } }
+    private async Task NextPage() { if (page < totalPages) { page++; await LoadUsers(); } }
+    private async Task HandleSearchKey(KeyboardEventArgs e) { if (e.Key == "Enter") await SearchUsers(); }
+
+    private async Task ChangeStatus(UserRow user, bool lockUser)
+    {
+        message = error = null; busyIds.Add(user.Id);
+        try
+        {
+            var action = lockUser ? "lock" : "unlock";
+            var response = await Http.PutAsync($"api/v1/users/{user.Id}/{action}", null);
+            if (!response.IsSuccessStatusCode) { error = await AuthService.ReadError(response); return; }
+            message = lockUser ? $"Đã khóa tài khoản {user.Email}." : $"Đã mở khóa tài khoản {user.Email}.";
+            await LoadUsers();
+        }
+        catch (HttpRequestException) { error = "Không kết nối được máy chủ."; }
+        finally { busyIds.Remove(user.Id); }
+    }
+
+    private static string StatusLabel(string value) => value switch
+    {
+        "Active" => "Hoạt động", "Locked" => "Đã khóa", "PendingVerification" => "Chờ xác minh", _ => value
+    };
+
+    private sealed class PagedUsers
+    {
+        public List<UserRow> Items { get; set; } = [];
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalItems { get; set; }
+        public int TotalPages { get; set; }
+    }
+    private sealed class UserRow
+    {
+        public Guid Id { get; set; }
+        public string Email { get; set; } = "";
+        public string Role { get; set; } = "";
+        public string Status { get; set; } = "";
+        public bool IsVerified { get; set; }
+        public string? FullName { get; set; }
+        public string? Phone { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+}
