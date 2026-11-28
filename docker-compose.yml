@@ -13,7 +13,7 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
-    ports: ["1433:1433"]
+    ports: ["14330:1433"]
     volumes: ["sqldata:/var/opt/mssql"]
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" || exit 1"]
@@ -70,6 +70,7 @@ services:
       ConnectionStrings__Default: "Server=sqlserver;Database=ContractDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
       Jwt__Key: "${JWT_KEY}"
       RabbitMq__Host: rabbitmq
+      ASPNETCORE_ENVIRONMENT: "Development"
     ports: ["5003:8080"]
 
   payment-api:

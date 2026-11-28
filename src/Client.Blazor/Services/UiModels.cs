@@ -63,7 +63,7 @@ public static class MenuCatalog
             {
                 new MenuItem("bi-search", "Tìm việc", "tim-viec"),
                 new MenuItem("bi-send", "Đơn ứng tuyển", "don-ung-tuyen"),
-                new MenuItem("bi-file-earmark-text", "Hợp đồng", "soon/hop-dong"),
+                new MenuItem("bi-file-earmark-text", "Hợp đồng", "hop-dong"),
             }),
             new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví điện tử", "soon/vi") }),
             Account
@@ -76,7 +76,7 @@ public static class MenuCatalog
                 new MenuItem("bi-plus-square", "Đăng tin tuyển dụng", "dang-tin"),
                 new MenuItem("bi-briefcase", "Tin của tôi", "tin-cua-toi"),
                 new MenuItem("bi-people", "Ứng viên", "ung-vien"),
-                new MenuItem("bi-file-earmark-text", "Hợp đồng", "soon/hop-dong"),
+                new MenuItem("bi-file-earmark-text", "Hợp đồng", "hop-dong"),
             }),
             new MenuSection("Tài chính", new[] { new MenuItem("bi-wallet2", "Ví điện tử", "soon/vi") }),
             Account

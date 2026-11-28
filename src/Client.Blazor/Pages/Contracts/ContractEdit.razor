@@ -1,0 +1,79 @@
+@page "/hop-dong/tao/{ApplicationId:guid}"
+@page "/hop-dong/{Id:guid}/sua"
+@attribute [Authorize(Roles = "Employer")]
+@inject ContractApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Lập hợp đồng · JobPlatform</PageTitle>
+<h2 class="fw-bold mb-3">@(Id == Guid.Empty ? "Lập hợp đồng" : "Sửa hợp đồng (tạo phiên bản mới)")</h2>
+@if (error is not null) { <div class="alert alert-danger">@error</div> }
+
+<EditForm Model="form" OnValidSubmit="Save">
+    <div class="card mb-3"><div class="card-body row g-3">
+        <div class="col-12"><label class="form-label">Phạm vi công việc</label><InputTextArea class="form-control" rows="3" @bind-Value="form.Scope" /></div>
+        <div class="col-12"><label class="form-label">Đầu ra bàn giao</label><InputTextArea class="form-control" rows="2" @bind-Value="form.Deliverables" /></div>
+        <div class="col-12"><label class="form-label">Tiêu chí nghiệm thu</label><InputTextArea class="form-control" rows="2" @bind-Value="form.AcceptanceCriteria" /></div>
+        <div class="col-md-4"><label class="form-label">Tổng giá trị (₫)</label><InputNumber class="form-control" @bind-Value="form.TotalAmount" /></div>
+        <div class="col-md-4"><label class="form-label">Ngày bắt đầu</label><InputDate class="form-control" @bind-Value="form.StartDate" /></div>
+        <div class="col-md-4"><label class="form-label">Ngày kết thúc</label><InputDate class="form-control" @bind-Value="form.EndDate" /></div>
+        <div class="col-md-4"><label class="form-label">Chu kỳ cập nhật tiến độ (ngày)</label><InputNumber class="form-control" @bind-Value="form.ProgressIntervalDays" /></div>
+        <div class="col-md-4"><label class="form-label">Số lần chỉnh sửa tối đa</label><InputNumber class="form-control" @bind-Value="form.RevisionLimit" /></div>
+        <div class="col-md-4"><label class="form-label">Tỷ lệ cọc Freelancer (%, &lt;20)</label>
+            <input type="number" class="form-control" step="0.5" @bind="depositPercent" /></div>
+    </div></div>
+
+    <div class="card mb-3"><div class="card-body">
+        <div class="d-flex justify-content-between"><h5 class="fw-bold">Milestone</h5>
+            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => form.Milestones.Add(new())">+ Thêm</button></div>
+        @foreach (var m in form.Milestones)
+        {
+            <div class="row g-2 mb-2 align-items-end">
+                <div class="col-md-5"><InputText class="form-control" placeholder="Tên milestone" @bind-Value="m.Title" /></div>
+                <div class="col-md-3"><InputNumber class="form-control" @bind-Value="m.Amount" /></div>
+                <div class="col-md-3"><InputDate class="form-control" @bind-Value="m.DueDate" /></div>
+                <div class="col-md-1"><button type="button" class="btn btn-outline-danger btn-sm" disabled="@(form.Milestones.Count == 1)" @onclick="() => form.Milestones.Remove(m)">×</button></div>
+            </div>
+        }
+        <div class="@(sum == form.TotalAmount ? "text-success" : "text-danger")">Tổng milestone: @sum.ToString("N0") ₫ / @form.TotalAmount.ToString("N0") ₫</div>
+    </div></div>
+
+    <button class="btn btn-primary" disabled="@busy">@(busy ? "Đang lưu…" : "Lưu hợp đồng")</button>
+</EditForm>
+
+@code {
+    [Parameter] public Guid ApplicationId { get; set; }
+    [Parameter] public Guid Id { get; set; }
+    ContractForm form = new(); string? error; bool busy;
+    decimal sum => form.Milestones.Sum(m => m.Amount);
+    decimal depositPercent { get => form.DepositRate * 100; set => form.DepositRate = value / 100; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        form.ApplicationId = ApplicationId;
+        if (Id == Guid.Empty) return;
+        try
+        {
+            var c = await Api.GetAsync(Id);
+            form = new ContractForm
+            {
+                ApplicationId = c.ApplicationId, Scope = c.Scope, Deliverables = c.Deliverables, AcceptanceCriteria = c.AcceptanceCriteria,
+                TotalAmount = c.TotalAmount, StartDate = c.StartDate, EndDate = c.EndDate, ProgressIntervalDays = c.ProgressIntervalDays,
+                RevisionLimit = c.RevisionLimit, DepositRate = c.DepositRate,
+                Milestones = c.Milestones.Select(m => new MilestoneInput { Title = m.Title, Amount = m.Amount, DueDate = m.DueDate }).ToList()
+            };
+        }
+        catch (Exception ex) { error = ContractApiService.Error(ex); }
+    }
+
+    async Task Save()
+    {
+        busy = true; error = null;
+        try
+        {
+            if (Id == Guid.Empty) { var r = await Api.CreateAsync(form); Nav.NavigateTo($"hop-dong/{r.GetProperty("id").GetGuid()}"); }
+            else { await Api.ReviseAsync(Id, form); Nav.NavigateTo($"hop-dong/{Id}"); }
+        }
+        catch (Exception ex) { error = ContractApiService.Error(ex); }
+        busy = false;
+    }
+}

@@ -22,5 +22,6 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredServ
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<JobApiService>();
 builder.Services.AddScoped<WalletApiService>();
+builder.Services.AddScoped<ContractApiService>();
 
 await builder.Build().RunAsync();

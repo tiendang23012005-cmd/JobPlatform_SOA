@@ -1,0 +1,126 @@
+﻿@page "/hop-dong/{Id:guid}"
+@attribute [Authorize]
+@inject ContractApiService Api
+@inject AuthenticationStateProvider Auth
+
+<PageTitle>Chi tiết hợp đồng · JobPlatform</PageTitle>
+@if (error is not null) { <div class="alert alert-danger">@error</div> }
+@if (ok is not null) { <div class="alert alert-success">@ok</div> }
+@if (c is null) { <p>Đang tải…</p> }
+else
+{
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+        <div><h2 class="fw-bold mb-1">@c.Title</h2>
+            <span class="badge bg-secondary">@ContractApiService.StatusText(c.Status)</span> <span class="text-muted">· phiên bản v@c.CurrentVersion</span></div>
+        <a class="btn btn-outline-secondary align-self-start" href="hop-dong">← Danh sách</a>
+    </div>
+
+    <div class="card mb-3"><div class="card-body">
+        <h5 class="fw-bold">Điều khoản</h5>
+        <p><b>Phạm vi:</b> @c.Scope</p><p><b>Đầu ra:</b> @c.Deliverables</p><p><b>Tiêu chí nghiệm thu:</b> @c.AcceptanceCriteria</p>
+        <div class="row">
+            <div class="col-md-3"><b>Giá trị:</b> @c.TotalAmount.ToString("N0") ₫</div>
+            <div class="col-md-3"><b>Phí nền tảng:</b> @((c.FeeRate * 100).ToString("0.##"))%</div>
+            <div class="col-md-3"><b>Tiền cọc Freelancer:</b> @c.DepositAmount.ToString("N0") ₫ (@((c.DepositRate * 100).ToString("0.##"))%)</div>
+            <div class="col-md-3"><b>Số lần sửa tối đa:</b> @c.RevisionLimit</div>
+        </div>
+        <div class="mt-2 text-muted">@c.StartDate.ToString("dd/MM/yyyy") → @c.EndDate.ToString("dd/MM/yyyy") · cập nhật tiến độ mỗi @c.ProgressIntervalDays ngày</div>
+    </div></div>
+
+    @if (c.Status == "Draft")
+    {
+        <div class="card mb-3 border-primary"><div class="card-body">
+            <h5 class="fw-bold">Ký xác nhận</h5>
+            <span class="badge @(c.EmployerConfirmed ? "bg-success" : "bg-warning text-dark")">Nhà tuyển dụng: @(c.EmployerConfirmed ? "đã ký" : "chưa ký")</span>
+            <span class="badge @(c.FreelancerConfirmed ? "bg-success" : "bg-warning text-dark")">Freelancer: @(c.FreelancerConfirmed ? "đã ký" : "chưa ký")</span>
+            <span class="text-muted ms-2">Hết hạn: @c.ExpiresAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+            <div class="mt-3 d-flex gap-2">
+                @if (!MySigned) { <button class="btn btn-primary" disabled="@busy" @onclick="Confirm">Đồng ý và xác nhận</button> }
+                @if (isEmployer) { <a class="btn btn-outline-primary" href="hop-dong/@c.Id/sua">Sửa điều khoản</a> }
+                <button class="btn btn-outline-danger" disabled="@busy" @onclick="Reject">Từ chối</button>
+            </div>
+        </div></div>
+    }
+
+    @if (c.Status == "Active" && !c.DepositHeld)
+    {
+        <div class="alert alert-warning">Freelancer chưa đặt cọc nên chưa thể bắt đầu (ký quỹ/đặt cọc làm ở lượt 5).
+            @* TODO(LUOT-5): XÓA nút DEV *@
+            <button class="btn btn-sm btn-dark ms-2" @onclick="DevFund">[DEV] Giả lập Funded</button></div>
+    }
+
+    <h5 class="fw-bold">Milestone</h5>
+    @foreach (var m in c.Milestones)
+    {
+        <div class="card mb-3"><div class="card-body">
+            <div class="d-flex justify-content-between flex-wrap">
+                <div><b>#@m.Order @m.Title</b> · @m.Amount.ToString("N0") ₫ · hạn @m.DueDate.ToString("dd/MM/yyyy")</div>
+                <span class="badge bg-info text-dark">@ContractApiService.StatusText(m.Status)@(m.AutoApproved ? " (tự nghiệm thu)" : "")</span>
+            </div>
+            <div class="progress my-2" style="height:8px"><div class="progress-bar" style="width:@m.ProgressPercent%"></div></div>
+            <small class="text-muted">Tiến độ @m.ProgressPercent% · chỉnh sửa @m.RevisionCount/@c.RevisionLimit</small>
+
+            @foreach (var s in m.Submissions)
+            {
+                <div class="border rounded p-2 mt-2"><b>Bản nộp @s.Version</b>@(s.IsLate ? " (trễ hạn)" : ""):
+                    <a href="@s.ArtifactUrl" target="_blank" rel="noopener">@s.ArtifactUrl</a> <span class="text-muted">@s.Note</span>
+                    @if (s.RevisionReason is not null) { <div class="text-danger">Yêu cầu sửa: @s.RevisionReason</div> }</div>
+            }
+
+            @if (isFreelancer && c.Status == "Active" && c.DepositHeld && m.Status is "Funded" or "InProgress" or "RevisionRequested")
+            {
+                <div class="row g-2 mt-2">
+                    <div class="col-md-2"><input type="number" min="0" max="100" class="form-control" placeholder="%" @bind="Get(m.Id).Percent" /></div>
+                    <div class="col-md-4"><input class="form-control" placeholder="Ghi chú tiến độ" @bind="Get(m.Id).Note" /></div>
+                    <div class="col-md-2"><button class="btn btn-outline-primary w-100" disabled="@busy" @onclick="() => Progress(m)">Lưu tiến độ</button></div>
+                    <div class="col-md-4"></div>
+                    <div class="col-md-6"><input class="form-control" placeholder="Đường dẫn sản phẩm (https://…)" @bind="Get(m.Id).Url" /></div>
+                    <div class="col-md-3"><button class="btn btn-primary w-100" disabled="@busy" @onclick="() => Submit(m)">Nộp sản phẩm</button></div>
+                </div>
+            }
+            @if (isEmployer && m.Status == "Submitted")
+            {
+                <div class="row g-2 mt-2">
+                    <div class="col-md-3"><button class="btn btn-success w-100" disabled="@busy" @onclick="() => Approve(m)">Nghiệm thu</button></div>
+                    <div class="col-md-6"><input class="form-control" placeholder="Nêu cụ thể phần chưa đạt…" @bind="Get(m.Id).Reason" /></div>
+                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" disabled="@busy" @onclick="() => Revise(m)">Yêu cầu chỉnh sửa</button></div>
+                </div>
+            }
+        </div></div>
+    }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    class Box { public int Percent; public string? Note, Url, Reason; }
+    readonly Dictionary<Guid, Box> boxes = new();
+    Box Get(Guid id) => boxes.TryGetValue(id, out var b) ? b : boxes[id] = new();
+    ContractVm? c; string? error, ok; bool busy, isEmployer, isFreelancer;
+    bool MySigned => isEmployer ? c!.EmployerConfirmed : c!.FreelancerConfirmed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        isEmployer = user.IsInRole("Employer"); isFreelancer = user.IsInRole("Freelancer");
+        await Reload();
+    }
+
+    async Task Reload() { try { c = await Api.GetAsync(Id); } catch (Exception ex) { error = ContractApiService.Error(ex); } }
+
+    async Task Run(Func<Task> act, string done)
+    {
+        busy = true; error = ok = null;
+        try { await act(); ok = done; await Reload(); }
+        catch (Exception ex) { error = ContractApiService.Error(ex); }
+        busy = false;
+    }
+
+    Task Confirm() => Run(() => Api.ConfirmAsync(Id, c!.CurrentVersion), "Đã xác nhận hợp đồng.");
+    Task Reject() => Run(() => Api.RejectAsync(Id), "Đã từ chối hợp đồng.");
+    Task DevFund() => Run(() => Api.DevFundAllAsync(Id), "Đã giả lập Funded + đặt cọc.");
+    Task Progress(MilestoneVm m) => Run(() => Api.ProgressAsync(m.Id, Get(m.Id).Percent, Get(m.Id).Note), "Đã lưu tiến độ.");
+    Task Submit(MilestoneVm m) => Run(() => Api.SubmitAsync(m.Id, Get(m.Id).Url ?? "", Get(m.Id).Note), "Đã nộp sản phẩm.");
+    Task Approve(MilestoneVm m) => Run(() => Api.ApproveAsync(m.Id), "Đã nghiệm thu.");
+    Task Revise(MilestoneVm m) => Run(() => Api.RevisionAsync(m.Id, Get(m.Id).Reason ?? ""), "Đã gửi yêu cầu chỉnh sửa.");
+}
+

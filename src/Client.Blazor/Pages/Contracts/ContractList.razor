@@ -1,0 +1,61 @@
+@page "/hop-dong"
+@attribute [Authorize]
+@inject ContractApiService Api
+@inject AuthenticationStateProvider Auth
+
+<PageTitle>Hợp đồng · JobPlatform</PageTitle>
+<h2 class="fw-bold mb-1">Hợp đồng</h2>
+<p class="text-muted">Hợp đồng của bạn và các đơn đã chấp nhận cần lập hợp đồng.</p>
+
+@if (error is not null) { <div class="alert alert-danger">@error</div> }
+
+@if (apps.Count > 0)
+{
+    <div class="card mb-4"><div class="card-body">
+        <h5 class="fw-bold">Đơn đã chấp nhận, chưa có hợp đồng</h5>
+        @foreach (var a in apps)
+        {
+            <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                <div><strong>@a.JobTitle</strong> <span class="text-muted">· đề xuất @a.ProposedBudget.ToString("N0") ₫</span></div>
+                <a class="btn btn-primary btn-sm" href="hop-dong/tao/@a.ApplicationId">Tạo hợp đồng</a>
+            </div>
+        }
+    </div></div>
+}
+
+@if (loading) { <p>Đang tải…</p> }
+else if (rows.Count == 0) { <p class="text-muted">Chưa có hợp đồng nào.</p> }
+else
+{
+    <div class="table-responsive"><table class="table align-middle">
+        <thead><tr><th>Công việc</th><th>Giá trị</th><th>Trạng thái</th><th>Phiên bản</th><th>Hạn ký</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var c in rows)
+        {
+            <tr>
+                <td>@c.Title</td><td>@c.TotalAmount.ToString("N0") ₫</td>
+                <td><span class="badge bg-secondary">@ContractApiService.StatusText(c.Status)</span></td>
+                <td>v@c.CurrentVersion</td>
+                <td>@(c.Status == "Draft" ? c.ExpiresAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "")</td>
+                <td><a class="btn btn-outline-primary btn-sm" href="hop-dong/@c.Id">Mở</a></td>
+            </tr>
+        }
+        </tbody>
+    </table></div>
+}
+
+@code {
+    List<ContractRow> rows = []; List<AcceptedApp> apps = []; bool loading = true; string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            rows = await Api.MineAsync();
+            var user = (await Auth.GetAuthenticationStateAsync()).User;
+            if (user.IsInRole("Employer")) apps = await Api.AcceptedAppsAsync();
+        }
+        catch (Exception ex) { error = ContractApiService.Error(ex); }
+        loading = false;
+    }
+}
